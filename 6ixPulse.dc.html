@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:#04060d;}
+  textarea::placeholder{color:#5c647d;}
+  ::-webkit-scrollbar{width:7px;height:7px;}
+  ::-webkit-scrollbar-thumb{background:rgba(124,140,255,0.28);border-radius:8px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  button:disabled{opacity:0.75;cursor:default;}
+  @keyframes sweepX{0%{transform:translateX(-120px);opacity:0;}8%{opacity:1;}92%{opacity:1;}100%{transform:translateX(1560px);opacity:0;}}
+  @keyframes radarspin{to{transform:rotate(360deg);}}
+  @keyframes ringout{0%{transform:scale(0.25);opacity:0.75;}100%{transform:scale(3.6);opacity:0;}}
+  @keyframes pulsedot{0%,100%{box-shadow:0 0 0 0 rgba(124,140,255,0.5);}50%{box-shadow:0 0 0 12px rgba(124,140,255,0);}}
+  @keyframes blink{0%,100%{opacity:1;}50%{opacity:0.2;}}
+  @keyframes shimmer{0%{background-position:-260px 0;}100%{background-position:260px 0;}}
+  @keyframes floatin{from{transform:translateY(9px);}to{transform:none;}}
+</style>
+</helmet>
+
+<div style="position:fixed;inset:0;overflow:hidden;background:radial-gradient(135% 105% at 50% -12%,#0c1226 0%,#070a16 52%,#04060d 100%);font-family:'IBM Plex Sans',system-ui,sans-serif;color:#e7eaf3;">
+ <div style="position:absolute;left:50%;top:50%;width:1536px;height:1024px;transform:translate(-50%,-50%) scale({{ scale }});transform-origin:center center;">
+
+  <!-- MAP -->
+  <div style="position:absolute;inset:0;border-radius:18px;overflow:hidden;box-shadow:0 44px 130px -34px rgba(0,0,0,0.92), inset 0 0 0 1px rgba(124,140,255,0.08);">
+   <div style="position:absolute;inset:-44px;background:url('assets/map-toronto.png') center/cover no-repeat;transform:scale({{ zoom }});transition:transform .55s cubic-bezier(.2,.7,.2,1);filter:{{ mapFilter }};"></div>
+   <div style="position:absolute;inset:0;background:radial-gradient(125% 85% at 50% 42%, transparent 52%, rgba(4,6,13,0.6) 100%);pointer-events:none;"></div>
+   <div style="position:absolute;inset:0;pointer-events:none;mix-blend-mode:screen;">{{ blobs }}</div>
+   <div style="position:absolute;inset:0;pointer-events:none;overflow:hidden;">{{ fx }}</div>
+   <div style="position:absolute;inset:0;">{{ markers }}</div>
+  </div>
+
+  <!-- HEADER -->
+  <div style="position:absolute;left:30px;top:24px;display:flex;align-items:center;gap:13px;z-index:60;">
+   <svg width="40" height="40" viewBox="0 0 40 40" fill="none"><circle cx="20" cy="20" r="17" stroke="url(#lg)" stroke-width="1.5" opacity="0.45"/><circle cx="20" cy="20" r="11" stroke="url(#lg)" stroke-width="1.5" opacity="0.85"/><circle cx="20" cy="20" r="4.5" fill="url(#lg)"/><defs><linearGradient id="lg" x1="0" y1="0" x2="40" y2="40"><stop stop-color="#5b8cff"/><stop offset="1" stop-color="#a855f7"/></linearGradient></defs></svg>
+   <div>
+     <div style="font-family:'Space Grotesk',sans-serif;font-size:23px;font-weight:700;line-height:1;background:linear-gradient(118deg,#cdd6ff,#ffffff 42%,#d7b8ff);-webkit-background-clip:text;background-clip:text;color:transparent;letter-spacing:-0.012em;">6ixPulse</div>
+     <div style="font-size:12px;color:#8b93ad;margin-top:5px;letter-spacing:.01em;">An agentic living map of Toronto</div>
+   </div>
+  </div>
+
+  <!-- COMMAND BAR -->
+  <div style="position:absolute;left:50%;top:22px;transform:translateX(-50%);width:712px;z-index:60;">
+   <div style="display:flex;align-items:stretch;gap:10px;padding:10px 10px 10px 15px;border-radius:16px;background:linear-gradient(180deg,rgba(15,19,32,0.93),rgba(10,13,22,0.93));border:1px solid rgba(124,140,255,0.18);backdrop-filter:blur(16px);box-shadow:0 20px 50px -22px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.05);">
+     <div style="display:flex;align-items:flex-start;color:#6f7895;padding-top:6px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg></div>
+     <textarea rows="2" value="{{ prompt }}" onChange="{{ onPrompt }}" onKeyDown="{{ onPromptKey }}" placeholder="Tell the agents about your budget, work, commute and lifestyle…  (⌘↵ to run)" style="flex:1;resize:none;border:none;outline:none;background:transparent;color:#e7eaf3;font-family:'IBM Plex Sans',sans-serif;font-size:14px;line-height:1.45;padding:3px 4px;"></textarea>
+     <button onClick="{{ run }}" disabled="{{ runDisabled }}" style="flex-shrink:0;align-self:center;display:flex;align-items:center;gap:8px;padding:0 18px;height:48px;border:none;border-radius:12px;background:linear-gradient(135deg,#5b8cff,#a855f7);color:#fff;font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 10px 26px -10px rgba(124,90,255,0.9), inset 0 1px 0 rgba(255,255,255,0.25);white-space:nowrap;">{{ runIcon }}<span>{{ runLabel }}</span></button>
+   </div>
+   <div style="display:flex;justify-content:center;margin-top:9px;">
+     <div style="display:inline-flex;align-items:center;gap:8px;padding:5px 13px;border-radius:20px;background:rgba(10,13,22,0.72);border:1px solid rgba(124,140,255,0.16);backdrop-filter:blur(8px);font-size:11.5px;color:#aab2cc;white-space:nowrap;">
+       <span style="width:7px;height:7px;border-radius:50%;background:linear-gradient(135deg,#5b8cff,#a855f7);box-shadow:0 0 8px #7c8cff;"></span>
+       Heat layer — <span style="color:#e7eaf3;font-weight:600;">{{ activeLayerLabel }}</span>
+     </div>
+   </div>
+  </div>
+
+  <!-- FILTERS / SAVED -->
+  <div style="position:absolute;right:16px;top:26px;display:flex;gap:10px;z-index:60;">
+   <button style="display:flex;align-items:center;gap:8px;height:42px;padding:0 16px;border-radius:12px;background:rgba(13,17,28,0.82);border:1px solid rgba(124,140,255,0.16);color:#cfd5e8;font-family:'IBM Plex Sans',sans-serif;font-size:13px;cursor:pointer;backdrop-filter:blur(10px);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4-2v-4z"/></svg>Filters</button>
+   <button style="display:flex;align-items:center;gap:8px;height:42px;padding:0 16px;border-radius:12px;background:rgba(13,17,28,0.82);border:1px solid rgba(124,140,255,0.16);color:#cfd5e8;font-family:'IBM Plex Sans',sans-serif;font-size:13px;cursor:pointer;backdrop-filter:blur(10px);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/></svg>Saved<span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#7c8cff;background:rgba(124,140,255,0.14);padding:1px 6px;border-radius:6px;">{{ compareCount }}</span></button>
+  </div>
+
+  <!-- RESULTS PANEL -->
+  <div style="position:absolute;left:16px;top:104px;width:292px;display:flex;flex-direction:column;max-height:600px;border-radius:16px;background:linear-gradient(180deg,rgba(13,17,28,0.93),rgba(9,12,20,0.94));border:1px solid rgba(124,140,255,0.14);backdrop-filter:blur(15px);box-shadow:0 22px 56px -24px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.04);z-index:50;">
+   <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 16px 11px;">
+     <div style="font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600;color:#f1f3fa;">Best Neighbourhood Matches</div>
+   </div>
+   <sc-if value="{{ running }}" hint-placeholder-val="{{ false }}">
+     <div style="padding:2px 14px 6px;">
+       <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#9aa2bd;margin-bottom:12px;"><span style="width:7px;height:7px;border-radius:50%;background:#7c8cff;animation:blink 1s infinite;"></span>Agents analysing the city…</div>
+       <div style="display:flex;flex-direction:column;gap:10px;">
+         <div style="height:62px;border-radius:12px;background:linear-gradient(90deg,rgba(124,140,255,0.05),rgba(124,140,255,0.14),rgba(124,140,255,0.05));background-size:260px 100%;animation:shimmer 1.2s infinite linear;"></div>
+         <div style="height:62px;border-radius:12px;background:linear-gradient(90deg,rgba(124,140,255,0.05),rgba(124,140,255,0.12),rgba(124,140,255,0.05));background-size:260px 100%;animation:shimmer 1.2s infinite linear;animation-delay:.15s;"></div>
+         <div style="height:62px;border-radius:12px;background:linear-gradient(90deg,rgba(124,140,255,0.05),rgba(124,140,255,0.1),rgba(124,140,255,0.05));background-size:260px 100%;animation:shimmer 1.2s infinite linear;animation-delay:.3s;"></div>
+       </div>
+     </div>
+   </sc-if>
+   <sc-if value="{{ ready }}" hint-placeholder-val="{{ true }}">
+     <div style="overflow-y:auto;padding:0 12px 6px;display:flex;flex-direction:column;gap:7px;">
+       <sc-for list="{{ results }}" as="r" hint-placeholder-count="5">
+         <div onClick="{{ r.onClick }}" style="{{ r.rowStyle }}">
+           <div style="display:flex;align-items:center;gap:9px;">
+             <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#6f7895;width:14px;text-align:center;">{{ r.rank }}</span>
+             <span style="flex:1;font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:600;color:#f1f3fa;">{{ r.name }}</span>
+             <span style="{{ r.badgeStyle }}">{{ r.scoreDisplay }}</span>
+           </div>
+           <div style="display:flex;align-items:center;gap:14px;padding-left:23px;color:#9aa2bd;font-size:12px;white-space:nowrap;">
+             <span style="display:inline-flex;align-items:center;gap:5px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="12" rx="2"/><path d="M4 10h16M8 20l1.5-2M16 20l-1.5-2"/></svg>{{ r.commuteLabel }}</span>
+             <span style="display:inline-flex;align-items:center;gap:5px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10l8-6 8 6v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/></svg>{{ r.rentLabel }}</span>
+           </div>
+           <div style="padding-left:23px;display:flex;align-items:center;gap:8px;">
+             <span style="{{ r.tagStyle }}">{{ r.tag }}</span>
+             <sc-if value="{{ r.showDim }}" hint-placeholder-val="{{ false }}">
+               <span style="flex:1;display:flex;align-items:center;gap:6px;font-size:10px;color:#7e87a3;">{{ r.dimLabel }}<span style="flex:1;height:4px;border-radius:3px;background:rgba(255,255,255,0.07);overflow:hidden;"><span style="display:block;height:100%;{{ r.dimBarStyle }}border-radius:3px;transition:width .5s;"></span></span></span>
+             </sc-if>
+           </div>
+         </div>
+       </sc-for>
+     </div>
+   </sc-if>
+   <div style="padding:11px 14px 14px;border-top:1px solid rgba(124,140,255,0.1);">
+     <button onClick="{{ openCompare }}" style="width:100%;height:40px;border-radius:11px;background:rgba(124,140,255,0.07);border:1px solid rgba(124,140,255,0.18);color:#c9d0e8;font-family:'IBM Plex Sans',sans-serif;font-size:13px;font-weight:500;cursor:pointer;">View Full Comparison</button>
+   </div>
+  </div>
+
+  <!-- MAP LAYERS PANEL -->
+  <div style="position:absolute;left:16px;top:726px;width:212px;padding:15px 15px 14px;border-radius:16px;background:linear-gradient(180deg,rgba(13,17,28,0.93),rgba(9,12,20,0.94));border:1px solid rgba(124,140,255,0.14);backdrop-filter:blur(15px);box-shadow:0 22px 56px -24px rgba(0,0,0,0.85);z-index:50;">
+   <div style="font-family:'Space Grotesk',sans-serif;font-size:13.5px;font-weight:600;color:#f1f3fa;margin-bottom:12px;">Map Layers</div>
+   <div style="display:flex;flex-direction:column;gap:11px;">
+     <div onClick="{{ tgSafety }}" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;"><span style="font-size:12.5px;color:#cdd3e6;">Safety / Risk</span><span style="position:relative;width:38px;height:21px;border-radius:11px;transition:.25s;{{ swSafety }}"><span style="position:absolute;top:2px;left:0;width:17px;height:17px;border-radius:50%;background:#fff;transition:.25s;{{ knobSafety }}"></span></span></div>
+     <div onClick="{{ tgRent }}" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;"><span style="font-size:12.5px;color:#cdd3e6;">Avg. Rent (1BR)</span><span style="position:relative;width:38px;height:21px;border-radius:11px;transition:.25s;{{ swRent }}"><span style="position:absolute;top:2px;left:0;width:17px;height:17px;border-radius:50%;background:#fff;transition:.25s;{{ knobRent }}"></span></span></div>
+     <div onClick="{{ tgCommute }}" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;"><span style="font-size:12.5px;color:#cdd3e6;">Commute Time</span><span style="position:relative;width:38px;height:21px;border-radius:11px;transition:.25s;{{ swCommute }}"><span style="position:absolute;top:2px;left:0;width:17px;height:17px;border-radius:50%;background:#fff;transition:.25s;{{ knobCommute }}"></span></span></div>
+     <div onClick="{{ tgAmen }}" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;"><span style="font-size:12.5px;color:#cdd3e6;">Amenities</span><span style="position:relative;width:38px;height:21px;border-radius:11px;transition:.25s;{{ swAmen }}"><span style="position:absolute;top:2px;left:0;width:17px;height:17px;border-radius:50%;background:#fff;transition:.25s;{{ knobAmen }}"></span></span></div>
+     <div onClick="{{ tgTransit }}" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;"><span style="font-size:12.5px;color:#cdd3e6;">Transit Access</span><span style="position:relative;width:38px;height:21px;border-radius:11px;transition:.25s;{{ swTransit }}"><span style="position:absolute;top:2px;left:0;width:17px;height:17px;border-radius:50%;background:#fff;transition:.25s;{{ knobTransit }}"></span></span></div>
+   </div>
+   <div style="margin-top:14px;padding-top:13px;border-top:1px solid rgba(124,140,255,0.1);">
+     <div style="font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:#6f7895;margin-bottom:8px;">Agent run style</div>
+     <div style="display:flex;padding:3px;border-radius:10px;background:rgba(255,255,255,0.04);">
+       <button onClick="{{ setCascade }}" style="flex:1;height:28px;border:none;border-radius:8px;font-family:'IBM Plex Sans',sans-serif;font-size:11.5px;font-weight:600;cursor:pointer;transition:.2s;{{ cascadeStyle }}">Cascade</button>
+       <button onClick="{{ setRadar }}" style="flex:1;height:28px;border:none;border-radius:8px;font-family:'IBM Plex Sans',sans-serif;font-size:11.5px;font-weight:600;cursor:pointer;transition:.2s;{{ radarStyle }}">Radar</button>
+     </div>
+   </div>
+  </div>
+
+  <!-- RIGHT COLUMN: DETAIL (safety + neighbourhood) -->
+  <sc-if value="{{ showDetail }}" hint-placeholder-val="{{ true }}">
+   <div style="position:absolute;right:16px;top:104px;width:292px;padding:16px;border-radius:16px;background:linear-gradient(180deg,rgba(13,17,28,0.93),rgba(9,12,20,0.94));border:1px solid rgba(124,140,255,0.14);backdrop-filter:blur(15px);box-shadow:0 22px 56px -24px rgba(0,0,0,0.85);z-index:50;">
+     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:13px;">
+       <span style="font-family:'Space Grotesk',sans-serif;font-size:14.5px;font-weight:600;color:#f1f3fa;">Safety / Risk Level</span>
+       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6f7895" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01" stroke-linecap="round"/></svg>
+     </div>
+     <div style="height:9px;border-radius:5px;background:linear-gradient(90deg,#2dd4a0,#f5b13d 52%,#f87171);box-shadow:inset 0 0 0 1px rgba(0,0,0,0.2);"></div>
+     <div style="display:flex;justify-content:space-between;margin-top:7px;font-size:11px;color:#9aa2bd;"><span>Safe</span><span>Moderate</span><span>High Risk</span></div>
+     <div style="margin-top:11px;font-size:11.5px;line-height:1.5;color:#7e87a3;">Relative safety signals from reported incident density — never a judgment of any community. Confidence is limited by public data quality.</div>
+   </div>
+
+   <div style="position:absolute;right:16px;top:300px;width:292px;display:flex;flex-direction:column;padding:16px;border-radius:16px;background:linear-gradient(180deg,rgba(13,17,28,0.93),rgba(9,12,20,0.94));border:1px solid rgba(124,140,255,0.14);backdrop-filter:blur(15px);box-shadow:0 22px 56px -24px rgba(0,0,0,0.85);z-index:50;">
+     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+       <span style="font-family:'Space Grotesk',sans-serif;font-size:19px;font-weight:700;color:#fff;white-space:nowrap;">{{ selName }}</span>
+       <span style="{{ selScoreStyle }}">{{ selScore }}</span>
+     </div>
+     <div style="margin-bottom:13px;"><span style="{{ consensusStyle }}">{{ consensusLabel }} · agent consensus</span></div>
+     <div style="font-size:12px;font-weight:600;color:#cdd3e6;margin-bottom:10px;">Why it works for you</div>
+     <div style="display:flex;flex-direction:column;gap:11px;">{{ whyList }}</div>
+     <div style="height:1px;background:rgba(124,140,255,0.1);margin:15px 0 13px;"></div>
+     <div style="font-size:12px;font-weight:600;color:#cdd3e6;margin-bottom:8px;">Rent Trend (predicted)</div>
+     <div style="border-radius:10px;background:rgba(255,255,255,0.02);padding:8px 8px 4px;">{{ spark }}</div>
+     <div style="display:flex;align-items:center;gap:6px;margin-top:9px;font-size:12.5px;color:{{ trendColor }};font-weight:600;font-family:'JetBrains Mono',monospace;">{{ trendArrow }} {{ trendPct }}<span style="color:#7e87a3;font-weight:400;font-family:'IBM Plex Sans',sans-serif;">next 12 months</span></div>
+     <div style="height:1px;background:rgba(124,140,255,0.1);margin:14px 0 13px;"></div>
+     <div style="font-size:12px;font-weight:600;color:#cdd3e6;margin-bottom:4px;">Typical Rent Range</div>
+     <div style="font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:700;color:#fff;">{{ rentRange }}</div>
+     <div style="font-size:11.5px;color:#7e87a3;margin-top:2px;">1 Bed · 1 Bath</div>
+     <div style="margin-top:12px;display:flex;gap:9px;align-items:flex-start;font-size:11.5px;line-height:1.45;color:#d8a657;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px;"><path d="M12 3l9.5 16.5H2.5z"/><path d="M12 10v4M12 17h.01"/></svg><span>{{ tradeoff }}</span></div>
+     <button style="margin-top:15px;width:100%;height:46px;border:none;border-radius:12px;background:linear-gradient(135deg,#5b8cff,#a855f7);color:#fff;font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 10px 26px -12px rgba(124,90,255,0.9);">View Listings <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+     <button onClick="{{ addCompare }}" style="margin-top:9px;width:100%;height:42px;border-radius:12px;background:rgba(124,140,255,0.06);border:1px solid rgba(124,140,255,0.18);color:#c9d0e8;font-family:'IBM Plex Sans',sans-serif;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">{{ compareLabel }} <svg width="15" height="15" viewBox="0 0 24 24" fill="{{ compareHeartFill }}" stroke="#9aa2bd" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/></svg></button>
+   </div>
+  </sc-if>
+
+  <!-- RIGHT COLUMN: AGENT RAIL -->
+  <sc-if value="{{ showRail }}" hint-placeholder-val="{{ false }}">
+   <div style="position:absolute;right:16px;top:104px;width:292px;height:842px;display:flex;flex-direction:column;border-radius:16px;background:linear-gradient(180deg,rgba(13,17,28,0.95),rgba(9,12,20,0.96));border:1px solid rgba(124,140,255,0.2);backdrop-filter:blur(16px);box-shadow:0 22px 60px -22px rgba(0,0,0,0.9), inset 0 1px 0 rgba(255,255,255,0.05);z-index:55;">
+     <div style="padding:15px 16px 12px;border-bottom:1px solid rgba(124,140,255,0.12);">
+       <div style="display:flex;align-items:center;justify-content:space-between;">
+         <div style="display:flex;align-items:center;gap:9px;font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600;color:#f1f3fa;"><span style="width:8px;height:8px;border-radius:50%;background:linear-gradient(135deg,#5b8cff,#a855f7);box-shadow:0 0 10px #7c8cff;{{ railDotAnim }}"></span>City Agents</div>
+         <sc-if value="{{ railClosable }}" hint-placeholder-val="{{ false }}"><button onClick="{{ closeRail }}" style="width:26px;height:26px;border-radius:8px;border:1px solid rgba(124,140,255,0.18);background:rgba(255,255,255,0.03);color:#9aa2bd;cursor:pointer;display:grid;place-items:center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></sc-if>
+       </div>
+       <div style="font-size:12px;color:#9aa2bd;margin-top:5px;">{{ railTitle }} · <span style="color:#aab2cc;">{{ railSub }}</span></div>
+     </div>
+     <div style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:9px;">
+       <sc-for list="{{ agentItems }}" as="ag" hint-placeholder-count="6">
+         <div style="border-radius:12px;border:1px solid rgba(124,140,255,0.1);background:rgba(255,255,255,0.02);padding:11px 12px;">
+           <div style="display:flex;align-items:center;gap:10px;">
+             <span style="width:32px;height:32px;border-radius:9px;display:grid;place-items:center;flex-shrink:0;{{ ag.iconWrapStyle }}">{{ ag.iconEl }}</span>
+             <div style="flex:1;min-width:0;">
+               <div style="font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:600;color:#eef0f7;">{{ ag.name }}</div>
+               <div style="font-size:10px;color:#6f7895;letter-spacing:.02em;">{{ ag.tag }} Agent</div>
+             </div>
+             <span style="font-size:10px;font-weight:600;padding:3px 8px;border-radius:7px;{{ ag.statusStyle }}">{{ ag.statusLabel }}</span>
+             <span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600;min-width:24px;text-align:right;{{ ag.scoreColor }}">{{ ag.scoreText }}</span>
+           </div>
+           <sc-if value="{{ ag.showLines }}" hint-placeholder-val="{{ false }}">
+             <div style="margin-top:9px;padding-left:42px;display:flex;flex-direction:column;gap:3px;">
+               <sc-for list="{{ ag.lines }}" as="ln" hint-placeholder-count="2"><div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;line-height:1.5;color:#8b93ad;">{{ ln }}</div></sc-for>
+               <sc-if value="{{ ag.thinking }}" hint-placeholder-val="{{ false }}"><div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#7c8cff;">▍</div></sc-if>
+             </div>
+           </sc-if>
+           <sc-if value="{{ ag.showFinding }}" hint-placeholder-val="{{ false }}">
+             <div style="margin-top:9px;padding-left:42px;font-size:11.5px;line-height:1.5;color:#aeb6d0;">{{ ag.finding }}</div>
+           </sc-if>
+           <div style="margin-top:10px;height:3px;border-radius:3px;background:rgba(255,255,255,0.05);overflow:hidden;"><span style="display:block;height:100%;border-radius:3px;transition:width .5s cubic-bezier(.2,.7,.2,1);{{ ag.barStyle }}"></span></div>
+         </div>
+       </sc-for>
+     </div>
+     <div style="padding:11px 14px 13px;border-top:1px solid rgba(124,140,255,0.12);">
+       <div style="font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:#6f7895;margin-bottom:7px;">Optimising for</div>
+       <div style="display:flex;flex-wrap:wrap;gap:6px;">{{ priorities }}</div>
+       <div style="margin-top:10px;font-size:10px;line-height:1.45;color:#5f677f;">6ixPulse uses public &amp; mock data for decision support — not a definitive safety, housing, or financial judgment.</div>
+     </div>
+   </div>
+  </sc-if>
+
+  <!-- BOTTOM NAV -->
+  <div style="position:absolute;left:50%;bottom:24px;transform:translateX(-50%);z-index:60;">
+   <div style="display:flex;align-items:center;gap:4px;padding:8px;border-radius:16px;background:linear-gradient(180deg,rgba(15,19,32,0.92),rgba(10,13,22,0.94));border:1px solid rgba(124,140,255,0.16);backdrop-filter:blur(16px);box-shadow:0 18px 44px -20px rgba(0,0,0,0.85);">
+     <button onClick="{{ navOverview }}" style="{{ nsOverview }}"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg>Overview</button>
+     <button onClick="{{ navAgents }}" style="{{ nsAgents }}"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="6" r="2.2"/><circle cx="12" cy="18.5" r="2.2"/><path d="M7.6 7.3l3.2 9.4M16.4 7.3l-3.2 9.4M8 6h8"/></svg>Agents</button>
+     <button onClick="{{ navCommute }}" style="{{ nsCommute }}"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="14" rx="3"/><path d="M5 11h14M8 21l2-3M16 21l-2-3M9 7h6"/></svg>Commute</button>
+     <button onClick="{{ navAfford }}" style="{{ nsAfford }}"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"/><path d="M17 6H9.8A2.8 2.8 0 0 0 9.8 11.6h4.4A2.8 2.8 0 0 1 14.2 17.2H6.5"/></svg>Affordability</button>
+     <button onClick="{{ navLife }}" style="{{ nsLife }}"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h12v3a5 5 0 0 1-5 5h-2a5 5 0 0 1-5-5z"/><path d="M17 9h2.2a2 2 0 0 1 0 4H17M6 20h12M9 3v2M12 3v2"/></svg>Lifestyle</button>
+     <button onClick="{{ navGrowth }}" style="{{ nsGrowth }}"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 16l5.5-5.5 3.5 3.5L21 5"/><path d="M15 5h6v6"/></svg>Future Growth</button>
+   </div>
+  </div>
+
+  <!-- CONTROLS -->
+  <div style="position:absolute;right:16px;bottom:24px;display:flex;align-items:center;gap:8px;z-index:60;">
+   <button onClick="{{ toggleBright }}" style="width:42px;height:42px;border-radius:12px;background:rgba(13,17,28,0.85);border:1px solid rgba(124,140,255,0.16);color:#cfd5e8;display:grid;place-items:center;cursor:pointer;backdrop-filter:blur(10px);"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+   <button style="height:42px;padding:0 16px;border-radius:12px;background:rgba(13,17,28,0.85);border:1px solid rgba(124,140,255,0.16);color:#cfd5e8;font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:600;cursor:pointer;backdrop-filter:blur(10px);">3D</button>
+   <button onClick="{{ zoomIn }}" style="width:42px;height:42px;border-radius:12px;background:rgba(13,17,28,0.85);border:1px solid rgba(124,140,255,0.16);color:#cfd5e8;display:grid;place-items:center;cursor:pointer;backdrop-filter:blur(10px);font-size:20px;">+</button>
+   <button onClick="{{ zoomOut }}" style="width:42px;height:42px;border-radius:12px;background:rgba(13,17,28,0.85);border:1px solid rgba(124,140,255,0.16);color:#cfd5e8;display:grid;place-items:center;cursor:pointer;backdrop-filter:blur(10px);font-size:20px;">−</button>
+  </div>
+
+  <!-- COMPARE OVERLAY -->
+  <sc-if value="{{ compareOpen }}" hint-placeholder-val="{{ false }}">
+   <div onClick="{{ closeCompare }}" style="position:absolute;inset:0;background:rgba(4,6,13,0.72);backdrop-filter:blur(6px);z-index:90;display:grid;place-items:center;">
+     <div style="width:980px;max-height:840px;display:flex;flex-direction:column;border-radius:18px;background:linear-gradient(180deg,rgba(15,19,32,0.98),rgba(10,13,22,0.99));border:1px solid rgba(124,140,255,0.2);box-shadow:0 40px 100px -30px rgba(0,0,0,0.9);overflow:hidden;">
+       <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid rgba(124,140,255,0.12);">
+         <div><div style="font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:700;color:#fff;">Full Neighbourhood Comparison</div><div style="font-size:12px;color:#8b93ad;margin-top:3px;">Ranked for your prompt · all 14 areas across every agent dimension</div></div>
+         <button onClick="{{ closeCompare }}" style="width:32px;height:32px;border-radius:9px;border:1px solid rgba(124,140,255,0.18);background:rgba(255,255,255,0.03);color:#9aa2bd;cursor:pointer;display:grid;place-items:center;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+       </div>
+       <div style="display:grid;grid-template-columns:200px repeat(7,1fr) 56px;gap:0 10px;padding:11px 22px;font-size:10px;letter-spacing:.03em;text-transform:uppercase;color:#6f7895;border-bottom:1px solid rgba(124,140,255,0.08);">
+         <span>Neighbourhood</span><span>Afford</span><span>Safety</span><span>Commute</span><span>Transit</span><span>Amenity</span><span>Lifestyle</span><span>Growth</span><span style="text-align:right;">Match</span>
+       </div>
+       <div style="overflow-y:auto;padding:6px 16px 16px;">
+         <sc-for list="{{ compareRows }}" as="c" hint-placeholder-count="14">
+           <div onClick="{{ c.onClick }}" style="display:grid;grid-template-columns:200px repeat(7,1fr) 56px;gap:0 10px;align-items:center;padding:9px 6px;border-radius:10px;cursor:pointer;{{ c.rowStyle }}">
+             <span style="display:flex;align-items:center;gap:9px;"><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#6f7895;width:16px;">{{ c.rank }}</span><span style="font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:600;color:#eef0f7;">{{ c.name }}</span></span>
+             <sc-for list="{{ c.dims }}" as="d" hint-placeholder-count="7"><span style="display:flex;align-items:center;gap:6px;"><span style="flex:1;height:5px;border-radius:3px;background:rgba(255,255,255,0.06);overflow:hidden;"><span style="display:block;height:100%;border-radius:3px;{{ d.barStyle }}"></span></span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#8b93ad;width:16px;">{{ d.val }}</span></span></sc-for>
+             <span style="text-align:right;"><span style="{{ c.badgeStyle }}">{{ c.overall }}</span></span>
+           </div>
+         </sc-for>
+       </div>
+     </div>
+   </div>
+  </sc-if>
+
+ </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  constructor(props){
+    super(props);
+    this.ICONS = {
+      aff:['M12 2v20','M17 6H9.8A2.8 2.8 0 0 0 9.8 11.6h4.4A2.8 2.8 0 0 1 14.2 17.2H6.5'],
+      commute:['M5 4h14a2 2 0 0 1 2 2v8a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6a2 2 0 0 1 2-2z','M3 10h18','M8 21l2-3M16 21l-2-3','M8 6h8'],
+      safety:['M12 2.5l7.5 2.8v5.4c0 4.6-3.2 7.6-7.5 8.8-4.3-1.2-7.5-4.2-7.5-8.8V5.3z','M9 11.5l2 2 4-4'],
+      life:['M5 8h12v3a5 5 0 0 1-5 5h-2a5 5 0 0 1-5-5z','M17 9h2.2a2 2 0 0 1 0 4H17','M8 20h12','M9 3v2M12 3v2'],
+      growth:['M3 16l5.5-5.5 3.5 3.5L21 5','M15 5h6v6'],
+      reco:['M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z'],
+      spark:['M12 3l1.6 4.6L18 9l-4.4 1.4L12 15l-1.6-4.6L6 9l4.4-1.4z']
+    };
+    this.DIMKEY = {aff:'affordability',commute:'commute',safety:'safety',life:'lifestyle',growth:'growth'};
+    this.NB = [
+      {id:'mimico',name:'Mimico',x:461,y:686,aff:82,safety:80,commute:78,transit:76,amen:72,life:74,growth:84,rentLo:1850,rentHi:2200,comLo:28,comHi:38,comMode:'GO',trend:6.2,growthNote:'Waterfront density & GO upgrades fuelling demand',lifeHi:'Lakefront parks and a quiet café strip',short:'A calm lakeshore pocket with honest rent and a quick GO hop to Union.',tradeoff:'Nightlife is limited — you\u2019ll head east for late venues.'},
+      {id:'eastyork',name:'East York',x:953,y:420,aff:85,safety:82,commute:74,transit:78,amen:76,life:78,growth:75,rentLo:1700,rentHi:2150,comLo:32,comHi:42,comMode:'TTC',trend:4.1,growthNote:'Steady family-driven demand',lifeHi:'Leafy streets with grocers and diners',short:'Dependable value with subway reach and low-key neighbourhood comfort.',tradeoff:'Commute stretches in rush hour on surface routes.'},
+      {id:'scarbjct',name:'Scarborough Junction',x:1168,y:420,aff:90,safety:68,commute:66,transit:64,amen:62,life:60,growth:78,rentLo:1650,rentHi:2100,comLo:35,comHi:45,comMode:'GO + TTC',trend:7.4,growthNote:'Eglinton East LRT on the horizon',lifeHi:'Affordable plazas and community hubs',short:'The budget winner — most space per dollar, betting on transit to come.',tradeoff:'Mixed safety signals and a longer, transfer-heavy commute today.'},
+      {id:'weston',name:'Weston',x:507,y:338,aff:88,safety:66,commute:72,transit:74,amen:60,life:58,growth:82,rentLo:1600,rentHi:2000,comLo:40,comHi:50,comMode:'UP Express',trend:6.8,growthNote:'UP Express access spurring renewal',lifeHi:'A revitalising main street',short:'Cheap with a surprise express line — early days of a turnaround.',tradeoff:'Amenities thin out after dark; safety signals are mixed.'},
+      {id:'northyork',name:'North York (Edges)',x:753,y:205,aff:80,safety:78,commute:70,transit:80,amen:74,life:70,growth:74,rentLo:1800,rentHi:2200,comLo:30,comHi:45,comMode:'subway',trend:4.6,growthNote:'Transit-oriented mid-rise growth',lifeHi:'Plaza dining and big parks',short:'Subway-anchored balance between price and reach.',tradeoff:'Some edges feel car-first and spread out.'},
+      {id:'leslieville',name:'Leslieville',x:968,y:594,aff:70,safety:80,commute:80,transit:80,amen:88,life:90,growth:80,rentLo:1950,rentHi:2400,comLo:22,comHi:30,comMode:'streetcar',trend:5.7,growthNote:'Maturing east-end momentum',lifeHi:'Brunch, breweries and boutiques',short:'East-end charm and cafés galore, a short streetcar from the core.',tradeoff:'Top-end rent can edge past your cap on newer units.'},
+      {id:'liberty',name:'Liberty Village',x:676,y:614,aff:55,safety:84,commute:90,transit:82,amen:90,life:92,growth:70,rentLo:2200,rentHi:2800,comLo:12,comHi:20,comMode:'GO + streetcar',trend:2.4,growthNote:'Largely built out; slower upside',lifeHi:'Dense gyms, bars and coffee',short:'Walk-everywhere energy minutes from Union — at a premium.',tradeoff:'Rent runs above your budget with little room to grow in value.'},
+      {id:'parkdale',name:'Parkdale',x:614,y:655,aff:76,safety:64,commute:84,transit:82,amen:80,life:82,growth:76,rentLo:1750,rentHi:2200,comLo:18,comHi:26,comMode:'streetcar',trend:5.1,growthNote:'Gentrifying lakeside stretch',lifeHi:'Eclectic eats and live music',short:'Characterful, well-connected and still within reach on rent.',tradeoff:'Safety signals vary block to block — worth a local look.'},
+      {id:'junction',name:'The Junction',x:599,y:502,aff:72,safety:74,commute:76,transit:72,amen:82,life:84,growth:86,rentLo:1850,rentHi:2300,comLo:28,comHi:36,comMode:'UP Express',trend:6.5,growthNote:'Strong creative-class influx',lifeHi:'Indie cafés, makers and brunch',short:'A rising west-end scene with the best growth read on the board.',tradeoff:'Transit needs a transfer and rent is climbing fast.'},
+      {id:'yongeeg',name:'Yonge & Eglinton',x:860,y:379,aff:60,safety:82,commute:80,transit:86,amen:86,life:84,growth:88,rentLo:2050,rentHi:2600,comLo:22,comHi:30,comMode:'subway + LRT',trend:6.9,growthNote:'Crosstown LRT unlocking access',lifeHi:'A buzzy midtown core',short:'Midtown convenience with the Crosstown about to change the math.',tradeoff:'Premium rent pushes past budget for most units.'},
+      {id:'danforth',name:'Danforth',x:999,y:502,aff:74,safety:81,commute:82,transit:88,amen:86,life:88,growth:76,rentLo:1900,rentHi:2300,comLo:20,comHi:28,comMode:'subway',trend:4.8,growthNote:'Steady transit-rich demand',lifeHi:'Greektown patios and groceries',short:'Subway-on-your-doorstep living with a great food street.',tradeoff:'Newer one-beds creep toward the top of your range.'},
+      {id:'regent',name:'Regent Park',x:876,y:543,aff:78,safety:70,commute:88,transit:84,amen:76,life:74,growth:90,rentLo:1800,rentHi:2250,comLo:12,comHi:18,comMode:'streetcar',trend:8.1,growthNote:'Landmark revitalisation underway',lifeHi:'New parks and a community centre',short:'A renewed downtown-edge district with the strongest momentum.',tradeoff:'Transition is ongoing; safety signals are still settling.'},
+      {id:'etobicoke',name:'Etobicoke',x:338,y:512,aff:84,safety:76,commute:64,transit:66,amen:68,life:66,growth:72,rentLo:1700,rentHi:2100,comLo:38,comHi:52,comMode:'GO + bus',trend:4.3,growthNote:'Affordable suburban steadiness',lifeHi:'Big-box ease and trails',short:'Roomy and affordable if you can accept a longer haul to Union.',tradeoff:'Commute and transit access are the clear trade-offs.'},
+      {id:'downtown',name:'Downtown Core',x:799,y:573,aff:48,safety:72,commute:95,transit:95,amen:95,life:90,growth:68,rentLo:2300,rentHi:3000,comLo:5,comHi:15,comMode:'subway + walk',trend:2.1,growthNote:'Saturated market; thin upside',lifeHi:'Everything at your door',short:'Unbeatable access and amenities — if budget weren\u2019t the question.',tradeoff:'Well over your rent cap; you pay for the convenience.'}
+    ];
+    this.AGENTS = [
+      {id:'aff',name:'Affordability',color:'#34d399',tag:'Budget'},
+      {id:'commute',name:'Commute',color:'#38bdf8',tag:'Routes'},
+      {id:'safety',name:'Safety Signals',color:'#f5b13d',tag:'Signals'},
+      {id:'life',name:'Lifestyle',color:'#a855f7',tag:'Amenities'},
+      {id:'growth',name:'Future Growth',color:'#f472b6',tag:'Momentum'},
+      {id:'reco',name:'Recommendation',color:'#8b8bff',tag:'Consensus'}
+    ];
+    const DEFAULT_PROMPT = "I make $70k, work near Union, want under 45 min commute, safe area, near caf\u00e9s, max rent $2,200.";
+    const parsed = this.parsePrompt(DEFAULT_PROMPT);
+    const ranked = this.rank(parsed);
+    const top = ranked[0];
+    this.state = {
+      prompt: DEFAULT_PROMPT,
+      weights: parsed.weights, budget: parsed.budget, cap: parsed.cap,
+      ranked, selectedId: top.id, hoverId: null,
+      phase: 'done', consensus: false,
+      agents: this.AGENTS.map(a=>({...a, status:'done', lines:[], score: a.id==='reco'?top.overall:top.dims[this.DIMKEY[a.id]]})),
+      runStyle:'cascade', navMode:'overview',
+      layers:{safety:true,rent:false,commute:false,amenities:false,transit:true},
+      scoreT:1, scale:this.calcScale(), zoom:1, bright:false,
+      agentPanelOpen:false, compareOpen:false, compare:[]
+    };
+    this._timers=[]; this._raf=null;
+  }
+  calcScale(){ try{ return Math.min(window.innerWidth/1536, window.innerHeight/1024);}catch(e){return 1;} }
+  componentDidMount(){ this._onResize=()=>this.setState({scale:this.calcScale()}); window.addEventListener('resize',this._onResize); }
+  componentWillUnmount(){ window.removeEventListener('resize',this._onResize); this.clearTimers(); if(this._raf)cancelAnimationFrame(this._raf); }
+  clearTimers(){ this._timers.forEach(clearTimeout); this._timers=[]; }
+  schedule(fn,ms){ this._timers.push(setTimeout(fn,ms)); }
+  hexA(h,a){ const n=parseInt(h.slice(1),16); return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`; }
+
+  parsePrompt(t){
+    const s=(t||'').toLowerCase();
+    const w={affordability:1,safety:1,commute:1,transit:1,amenities:1,lifestyle:1,growth:1};
+    if(/safe|safety|secur|crime/.test(s)) w.safety+=1.5;
+    if(/afford|cheap|budget|max rent|under|\brent\b|\$\s?\d/.test(s)) w.affordability+=1.4;
+    if(/union|downtown|commut|\bmin\b|transit|ttc|subway|go train|\bgo\b/.test(s)){ w.commute+=1.2; w.transit+=0.6; }
+    if(/caf|coffee|park|night|grocer|restaurant|amenit|walk|lifestyle|\bbar\b|food/.test(s)){ w.lifestyle+=1.0; w.amenities+=0.9; }
+    if(/growth|invest|future|appreciat|up.?and.?coming|value|momentum|emerging/.test(s)) w.growth+=1.2;
+    let budget=null; const m=s.match(/\$\s?([\d,]{3,6})/g);
+    if(m){ const vals=m.map(x=>parseInt(x.replace(/[^\d]/g,''))).filter(v=>v>=1100&&v<=6000); if(vals.length) budget=Math.max(...vals); }
+    let cap=null; const cm=s.match(/(\d{2,3})\s*min/); if(cm) cap=parseInt(cm[1]);
+    return {weights:w, budget: budget||2200, cap: cap||45};
+  }
+  rank(parsed){
+    const {weights:w, budget, cap}=parsed;
+    const wSum=Object.values(w).reduce((a,b)=>a+b,0);
+    const rows=this.NB.map(nb=>{
+      const dims={affordability:nb.aff,safety:nb.safety,commute:nb.commute,transit:nb.transit,amenities:nb.amen,lifestyle:nb.life,growth:nb.growth};
+      let base=0; for(const k in w) base+=dims[k]*w[k]; base/=wSum;
+      let adj=0;
+      if(nb.rentHi<=budget) adj+=4; else if(nb.rentLo>budget) adj-=11; else adj-=2;
+      const mid=(nb.comLo+nb.comHi)/2; if(mid>cap) adj-=(mid-cap)*0.6;
+      const overall=Math.max(34,Math.min(99,Math.round(base+adj)));
+      return {...nb, dims, overall};
+    });
+    rows.sort((a,b)=> b.overall-a.overall || b.aff-a.aff);
+    rows.forEach((r,i)=> r.rank=i+1);
+    return rows;
+  }
+  dimColor(s){ const h=Math.max(0,Math.min(125,(s-48)/42*125)); return `hsl(${h.toFixed(0)},72%,52%)`; }
+  fmtRange(nb){ return `$${nb.rentLo.toLocaleString()}\u2013$${nb.rentHi.toLocaleString()}`; }
+  consensus(o){ return o>=88?{label:'Strong fit',color:'#34d399'}: o>=80?{label:'Solid fit',color:'#22d3ee'}: o>=72?{label:'Fair fit',color:'#f5b13d'}:{label:'Limited fit',color:'#f87171'}; }
+  tagFor(nb){
+    const dims=[nb.aff,nb.safety,nb.commute,nb.transit,nb.amen,nb.life,nb.growth];
+    const spread=Math.max(...dims)-Math.min(...dims);
+    if(nb.growth>=84 && nb.growth>=nb.aff) return {t:'Up & coming',c:'#a855f7'};
+    if(nb.aff>=84) return {t: nb.overall>=82?'Great value':'Good value', c:'#34d399'};
+    if(spread<=16) return {t: nb.overall>=82?'Great balance':'Balanced', c:'#22d3ee'};
+    if(nb.life>=86) return {t:'Vibrant', c:'#f472b6'};
+    if(nb.commute>=86) return {t:'Well connected', c:'#38bdf8'};
+    return {t:'Solid pick', c:'#8b9bff'};
+  }
+  activeLayerFromNav(){ return ({overview:'overall',commute:'commute',affordability:'rent',agents:'overall',lifestyle:'lifestyle',growth:'growth'})[this.state.navMode] || 'overall'; }
+  layerScore(nb,layer){ return ({safety:nb.safety,rent:nb.aff,commute:nb.commute,amenities:nb.amen,transit:nb.transit,lifestyle:nb.life,growth:nb.growth,overall:nb.overall})[layer]; }
+  agentThinking(id,parsed){
+    const b=parsed.budget, cap=parsed.cap;
+    return ({
+      aff:['Scanning 1-bed rent across 14 areas\u2026',`Comparing medians to your $${b.toLocaleString()} cap\u2026`,'Scoring budget fit, flagging overpriced zones'],
+      commute:['Routing every area to Union Station\u2026',`Weighing GO, subway & streetcar vs ${cap} min\u2026`,'Scoring commute burden and transfers'],
+      safety:['Aggregating reported incident density\u2026','Normalising by population and time of day\u2026','Setting relative safety signals (data-limited)'],
+      life:['Mapping caf\u00e9s, parks, groceries & nightlife\u2026','Gauging walkability and local character\u2026','Scoring lifestyle fit'],
+      growth:['Reading rent trajectories and permits\u2026','Tracking transit expansion & development\u2026','Projecting 12-month momentum'],
+      reco:['Gathering all agent findings\u2026','Weighting by your stated priorities\u2026','Forming consensus and ranking neighbourhoods']
+    })[id];
+  }
+  agentFinding(id,nb){
+    const tier=s=> s>=85?'excellent':s>=78?'strong':s>=70?'fair':'limited';
+    const b=this.state.budget, cap=this.state.cap, mid=Math.round((nb.comLo+nb.comHi)/2);
+    switch(id){
+      case 'aff': return `1-bed rent ${this.fmtRange(nb)} \u2014 ${nb.rentHi<=b?'fits under':nb.rentLo>b?'runs above':'brushes'} your $${b.toLocaleString()} cap. Budget fit ${tier(nb.aff)}.`;
+      case 'commute': return `\u2248${mid} min to Union via ${nb.comMode}; ${mid<=cap?'comfortably under':'around'} your ${cap}-min target.`;
+      case 'safety': return `Relative safety signals read ${tier(nb.safety)} here, from reported incident density. Confidence limited by public data quality.`;
+      case 'life': return `${nb.lifeHi}. Caf\u00e9, park and grocery density is ${tier(nb.amen)}.`;
+      case 'growth': return `${nb.growthNote}. Rent projected ${nb.trend>0?'+':''}${nb.trend}% over the next 12 months.`;
+      case 'reco': return `Agents converge on ${nb.name} \u2014 ${this.consensus(nb.overall).label}. ${nb.short}`;
+    }
+  }
+  icon(paths,opts){
+    const o=Object.assign({size:18,stroke:'currentColor',sw:1.7},opts||{});
+    const kids=paths.map((d,i)=>React.createElement('path',{key:i,d}));
+    return React.createElement('svg',{width:o.size,height:o.size,viewBox:'0 0 24 24',fill:'none',stroke:o.stroke,strokeWidth:o.sw,strokeLinecap:'round',strokeLinejoin:'round'},kids);
+  }
+  spinnerEl(){ return React.createElement('span',{style:{display:'inline-block',width:'14px',height:'14px',border:'2px solid rgba(255,255,255,0.4)',borderTopColor:'#fff',borderRadius:'50%',animation:'radarspin .7s linear infinite'}}); }
+
+  runAgents(){
+    if(this.state.phase==='running') return;
+    const parsed=this.parsePrompt(this.state.prompt);
+    const ranked=this.rank(parsed); const top=ranked[0];
+    this.clearTimers(); if(this._raf)cancelAnimationFrame(this._raf);
+    const base=this.AGENTS.map(a=>({...a,status:'queued',lines:[],score:null}));
+    this.setState({phase:'running',weights:parsed.weights,budget:parsed.budget,cap:parsed.cap,consensus:false,agents:base,scoreT:0,agentPanelOpen:false});
+    const setA=(i,patch)=>this.setState(st=>{const ag=st.agents.slice();ag[i]={...ag[i],...patch};return{agents:ag};});
+    const L=i=>this.agentThinking(this.AGENTS[i].id,parsed);
+    const sc=i=>{const id=this.AGENTS[i].id; return id==='reco'?top.overall:top.dims[this.DIMKEY[id]];};
+    if(this.state.runStyle==='cascade'){
+      const step=560;
+      this.AGENTS.forEach((a,i)=>{
+        const t=i*step;
+        this.schedule(()=>setA(i,{status:'scanning',lines:[L(i)[0]]}),t+60);
+        this.schedule(()=>setA(i,{lines:L(i).slice(0,2)}),t+250);
+        this.schedule(()=>setA(i,{status:'scoring',lines:L(i)}),t+380);
+        if(a.id==='reco') this.schedule(()=>this.setState({consensus:true}),t+120);
+        else this.schedule(()=>setA(i,{status:'done',score:sc(i)}),t+500);
+      });
+      this.schedule(()=>{setA(this.AGENTS.length-1,{status:'done',score:sc(this.AGENTS.length-1)});this.commitRun(ranked,top);}, this.AGENTS.length*step+260);
+    } else {
+      this.AGENTS.forEach((a,i)=>{
+        this.schedule(()=>setA(i,{status:'scanning',lines:[L(i)[0]]}),80+i*40);
+        this.schedule(()=>setA(i,{status:'scoring',lines:L(i).slice(0,2)}),1100+i*40);
+      });
+      this.schedule(()=>this.setState({consensus:true}),1850);
+      this.schedule(()=>this.AGENTS.forEach((a,i)=>setA(i,{status:'done',score:sc(i),lines:L(i)})),2450);
+      this.schedule(()=>this.commitRun(ranked,top),2700);
+    }
+  }
+  commitRun(ranked,top){ this.setState({ranked,selectedId:top.id,phase:'done',consensus:false,navMode:'overview',agentPanelOpen:false}); this.animateScores(); }
+  animateScores(){
+    const start=performance.now(), dur=850;
+    const tick=now=>{ const p=Math.min(1,(now-start)/dur); this.setState({scoreT:1-Math.pow(1-p,3)}); if(p<1) this._raf=requestAnimationFrame(tick); };
+    this._raf=requestAnimationFrame(tick);
+  }
+  selectNb(id){ this.setState({selectedId:id}); }
+  toggleLayer(k){ this.setState(st=>({layers:{...st.layers,[k]:!st.layers[k]}})); }
+  setNav(m){ if(m==='agents'){ this.setState({navMode:'agents',agentPanelOpen:true}); } else { this.setState({navMode:m,agentPanelOpen:false}); } }
+  setRunStyle(s){ if(this.state.phase!=='running') this.setState({runStyle:s}); }
+  zoomBy(d){ this.setState(st=>({zoom:Math.max(1,Math.min(1.6,+(st.zoom+d).toFixed(2)))})); }
+  toggleBright(){ this.setState(st=>({bright:!st.bright})); }
+  toggleCompare(id){ this.setState(st=>({compare: st.compare.includes(id)? st.compare.filter(x=>x!==id): [...st.compare,id]})); }
+
+  buildBlobs(){
+    const draw=[]; const prim=this.activeLayerFromNav();
+    draw.push({key:prim,emph:true});
+    Object.entries(this.state.layers).forEach(([k,on])=>{ if(on && k!==prim) draw.push({key:k,emph:false}); });
+    const els=[];
+    draw.forEach(Lr=>{ this.state.ranked.forEach(nb=>{
+      const s=this.layerScore(nb,Lr.key); const hue=Math.max(0,Math.min(125,(s-48)/42*125));
+      const size=72+(s/100)*92, op=Lr.emph?0.36:0.13;
+      els.push(React.createElement('div',{key:Lr.key+'-'+nb.id,style:{position:'absolute',left:nb.x+'px',top:nb.y+'px',width:size+'px',height:size+'px',transform:'translate(-50%,-50%)',borderRadius:'50%',background:`radial-gradient(circle, hsla(${hue},82%,56%,${op}) 0%, hsla(${hue},82%,50%,${op*0.5}) 42%, transparent 70%)`,filter:'blur(7px)',transition:'all .6s cubic-bezier(.2,.7,.2,1)'}}));
+    });});
+    return els;
+  }
+  buildMarkers(){
+    const {selectedId:sel,hoverId:hover,phase}=this.state; const running=phase==='running';
+    return this.state.ranked.map(nb=>{
+      const isSel=nb.id===sel, isTop=nb.rank===1, showLabel=isSel||isTop||nb.id===hover;
+      const hue=Math.max(0,Math.min(125,(nb.overall-48)/42*125)), col=`hsl(${hue.toFixed(0)},78%,54%)`;
+      const dot=isSel?16:isTop?14:nb.rank<=5?11:9; const kids=[];
+      if((isSel||isTop)&&!running) kids.push(React.createElement('span',{key:'r',style:{position:'absolute',left:'50%',top:'50%',width:dot*2+'px',height:dot*2+'px',marginLeft:-dot+'px',marginTop:-dot+'px',borderRadius:'50%',border:`2px solid ${isSel?'#9aa6ff':col}`,animation:'ringout 2.4s ease-out infinite'}}));
+      kids.push(React.createElement('span',{key:'d',style:{position:'absolute',left:'50%',top:'50%',width:dot+'px',height:dot+'px',transform:'translate(-50%,-50%)',borderRadius:'50%',background:isSel?'#fff':col,boxShadow:`0 0 ${isSel?16:10}px ${isSel?'#9aa6ff':col}, 0 0 2px rgba(0,0,0,.6)`,border:isSel?'2px solid #7c8cff':'none',opacity:running&&!isSel?0.4:1,transition:'opacity .4s'}}));
+      if(showLabel) kids.push(React.createElement('div',{key:'l',style:{position:'absolute',left:'50%',top:(dot/2+8)+'px',transform:'translateX(-50%)',whiteSpace:'nowrap',display:'flex',alignItems:'center',gap:'6px',padding:'3px 8px',borderRadius:'8px',background:'rgba(8,11,20,0.85)',border:'1px solid rgba(124,140,255,0.22)',backdropFilter:'blur(4px)',fontSize:'11px',fontWeight:600,fontFamily:"'Space Grotesk',sans-serif",color:'#e7eaf3',boxShadow:'0 6px 16px -8px rgba(0,0,0,.8)'}},[React.createElement('span',{key:'n'},nb.name),React.createElement('span',{key:'s',style:{color:col,fontFamily:"'JetBrains Mono',monospace"}},nb.overall)]));
+      return React.createElement('div',{key:nb.id,onClick:()=>this.selectNb(nb.id),onMouseEnter:()=>this.setState({hoverId:nb.id}),onMouseLeave:()=>this.setState({hoverId:null}),style:{position:'absolute',left:nb.x+'px',top:nb.y+'px',width:'1px',height:'1px',cursor:'pointer',zIndex:isSel?40:showLabel?30:20}},kids);
+    });
+  }
+  buildFx(){
+    if(this.state.phase!=='running') return null; const els=[];
+    if(this.state.runStyle==='cascade'){
+      els.push(React.createElement('div',{key:'g',style:{position:'absolute',top:'80px',left:0,width:'120px',height:'820px',background:'linear-gradient(90deg, transparent, rgba(124,160,255,0.28) 60%, transparent)',filter:'blur(3px)',animation:'sweepX 2.6s linear infinite'}}));
+      els.push(React.createElement('div',{key:'l',style:{position:'absolute',top:'80px',left:0,width:'2px',height:'820px',background:'linear-gradient(180deg,transparent,rgba(160,185,255,0.95),transparent)',boxShadow:'0 0 26px 5px rgba(124,140,255,0.6)',animation:'sweepX 2.6s linear infinite'}}));
+    } else {
+      els.push(React.createElement('div',{key:'rad',style:{position:'absolute',left:'799px',top:'573px',width:'1180px',height:'1180px',marginLeft:'-590px',marginTop:'-590px',borderRadius:'50%',background:'conic-gradient(from 0deg, rgba(124,150,255,0) 0deg, rgba(124,150,255,0.3) 30deg, rgba(168,85,247,0) 72deg)',animation:'radarspin 2.2s linear infinite'}}));
+      [0,1,2].forEach(i=>els.push(React.createElement('div',{key:'rr'+i,style:{position:'absolute',left:'799px',top:'573px',width:'170px',height:'170px',marginLeft:'-85px',marginTop:'-85px',borderRadius:'50%',border:'1.5px solid rgba(124,150,255,0.5)',animation:`ringout 2.4s ease-out ${i*0.8}s infinite`}})));
+    }
+    els.push(React.createElement('div',{key:'cp',style:{position:'absolute',left:'799px',top:'573px',width:'42px',height:'42px',marginLeft:'-21px',marginTop:'-21px',borderRadius:'50%',background:'radial-gradient(circle,#9aa6ff,transparent 70%)',animation:'pulsedot 1.2s ease-in-out infinite'}}));
+    return els;
+  }
+  buildSpark(nb){
+    const n=26,W=232,H=56,pad=6,seed=nb.name.length,slope=nb.trend/12; const vals=[];
+    for(let i=0;i<n;i++){ vals.push(10+slope*i*1.15+Math.sin(i*1.3+seed)*3+Math.cos(i*0.7+seed)*2); }
+    const mn=Math.min(...vals),mx=Math.max(...vals);
+    const sx=i=>(i/(n-1))*(W-2*pad)+pad, sy=v=>H-pad-((v-mn)/((mx-mn)||1))*(H-2*pad);
+    const d=vals.map((v,i)=>`${i?'L':'M'}${sx(i).toFixed(1)} ${sy(v).toFixed(1)}`).join(' ');
+    const area=d+` L ${sx(n-1).toFixed(1)} ${H} L ${sx(0).toFixed(1)} ${H} Z`;
+    const col=nb.trend>=0?'#34d399':'#f87171', gid='spk'+nb.id;
+    return React.createElement('svg',{width:'100%',height:'56',viewBox:`0 0 ${W} ${H}`,preserveAspectRatio:'none',style:{display:'block'}},[
+      React.createElement('defs',{key:'d'},React.createElement('linearGradient',{id:gid,x1:0,y1:0,x2:0,y2:1},[React.createElement('stop',{key:0,offset:'0%',stopColor:col,stopOpacity:0.34}),React.createElement('stop',{key:1,offset:'100%',stopColor:col,stopOpacity:0})])),
+      React.createElement('path',{key:'a',d:area,fill:`url(#${gid})`}),
+      React.createElement('path',{key:'l',d,fill:'none',stroke:col,strokeWidth:1.8,strokeLinecap:'round',strokeLinejoin:'round'})
+    ]);
+  }
+  buildWhy(nb){
+    const phr={affordability:'Lower rent than downtown',commute:`${nb.comLo}\u2013${nb.comHi} min to Union via ${nb.comMode}`,safety:'Relatively strong safety signals',transit:'Strong transit access',amenities:'Good grocery & caf\u00e9 density',lifestyle:nb.lifeHi,growth:nb.growthNote};
+    const dims={affordability:nb.aff,safety:nb.safety,commute:nb.commute,transit:nb.transit,amenities:nb.amen,lifestyle:nb.life,growth:nb.growth};
+    const order=['commute','affordability','amenities','lifestyle','transit','safety','growth'];
+    const checks=[]; order.forEach(k=>{ if(dims[k]>=75 && checks.length<5) checks.push(phr[k]); });
+    if(checks.length<3) order.forEach(k=>{ if(checks.length<4 && !checks.includes(phr[k])) checks.push(phr[k]); });
+    let lowK=order[0]; order.forEach(k=>{ if(dims[k]<dims[lowK]) lowK=k; });
+    const warnMap={commute:'Longer commute on some routes',safety:'Mixed safety signals \u2014 verify locally',amenities:'Fewer late-night options',lifestyle:'Quieter after dark',affordability:'Pricey at the very top end',transit:'Transit can need a transfer',growth:'Slower projected upside'};
+    const rows=checks.map((t,i)=>React.createElement('div',{key:'c'+i,style:{display:'flex',alignItems:'flex-start',gap:'9px',fontSize:'12.5px',lineHeight:'1.4',color:'#d7dcec'}},[
+      React.createElement('span',{key:'i',style:{flexShrink:0,width:'17px',height:'17px',borderRadius:'50%',background:'rgba(52,211,153,0.16)',display:'grid',placeItems:'center',marginTop:'1px'}},React.createElement('svg',{width:11,height:11,viewBox:'0 0 24 24',fill:'none',stroke:'#34d399',strokeWidth:3,strokeLinecap:'round',strokeLinejoin:'round'},React.createElement('path',{d:'M5 12l4 4 9-10'}))),
+      React.createElement('span',{key:'t'},t)
+    ]));
+    rows.push(React.createElement('div',{key:'w',style:{display:'flex',alignItems:'flex-start',gap:'9px',fontSize:'12.5px',lineHeight:'1.4',color:'#d8a657'}},[
+      React.createElement('span',{key:'i',style:{flexShrink:0,width:'17px',height:'17px',borderRadius:'50%',background:'rgba(216,166,87,0.16)',display:'grid',placeItems:'center',marginTop:'1px'}},React.createElement('svg',{width:11,height:11,viewBox:'0 0 24 24',fill:'none',stroke:'#d8a657',strokeWidth:2.4,strokeLinecap:'round',strokeLinejoin:'round'},[React.createElement('path',{key:0,d:'M12 4l9 15H3z'}),React.createElement('path',{key:1,d:'M12 10v4M12 17h.01'})])),
+      React.createElement('span',{key:'t'},warnMap[lowK])
+    ]));
+    return rows;
+  }
+  priorityChips(){
+    const meta={affordability:['Affordability','#34d399'],safety:['Safety','#f5b13d'],commute:['Commute','#38bdf8'],transit:['Transit','#22d3ee'],amenities:['Amenities','#a855f7'],lifestyle:['Lifestyle','#a855f7'],growth:['Growth','#f472b6']};
+    const ents=Object.entries(this.state.weights).filter(([k,v])=>v>1.05).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    if(!ents.length) return React.createElement('span',{style:{fontSize:'11px',color:'#6f7895'}},'Balanced across all signals');
+    return ents.map(([k],i)=>React.createElement('span',{key:i,style:{fontSize:'10.5px',fontWeight:600,padding:'2px 9px',borderRadius:'7px',color:meta[k][1],background:this.hexA(meta[k][1],0.14),border:`1px solid ${this.hexA(meta[k][1],0.28)}`}},meta[k][0]));
+  }
+  compareRows(){
+    const dimsDef=[['aff','#34d399'],['safety','#f5b13d'],['commute','#38bdf8'],['transit','#22d3ee'],['amen','#a855f7'],['life','#f472b6'],['growth','#8b9bff']];
+    return this.state.ranked.map(nb=>({
+      id:nb.id, rank:nb.rank, name:nb.name, overall:nb.overall,
+      badgeStyle:this.badgeStyle(this.dimColor(nb.overall)),
+      rowStyle: nb.id===this.state.selectedId?'background:rgba(124,140,255,0.1);':'background:transparent;',
+      onClick:()=>{ this.selectNb(nb.id); this.setState({compareOpen:false}); },
+      dims:dimsDef.map(([k,c])=>({val:nb[k], barStyle:`width:${nb[k]}%;background:${c};`}))
+    }));
+  }
+  badgeStyle(col){ return `background:${col};color:rgba(5,12,10,0.92);font-family:'JetBrains Mono',monospace;font-weight:700;font-size:13px;min-width:32px;height:23px;display:inline-flex;align-items:center;justify-content:center;padding:0 7px;border-radius:7px;box-shadow:0 2px 10px -2px ${this.hexA(col,0.6)};`; }
+  tagStyle(c){ return `display:inline-flex;align-items:center;white-space:nowrap;font-size:10.5px;font-weight:600;letter-spacing:.01em;padding:2px 8px;border-radius:6px;color:${c};background:${this.hexA(c,0.14)};border:1px solid ${this.hexA(c,0.28)};`; }
+  rowStyle(sel){ return `display:flex;flex-direction:column;gap:7px;padding:11px 12px;border-radius:12px;border:1px solid ${sel?'rgba(124,150,255,0.45)':'rgba(255,255,255,0.045)'};background:${sel?'rgba(124,140,255,0.12)':'rgba(255,255,255,0.015)'};cursor:pointer;transition:all .22s;`; }
+  switchStyle(on){ return `background:${on?'linear-gradient(135deg,#5b8cff,#a855f7)':'rgba(120,130,160,0.22)'};`; }
+  knobStyle(on){ return `transform:translateX(${on?'19px':'2px'});`; }
+  segStyle(active){ return active?'background:linear-gradient(135deg,#5b8cff,#a855f7);color:#fff;':'background:transparent;color:#8b93ad;'; }
+  navItemStyle(active){ return `display:flex;flex-direction:column;align-items:center;gap:5px;padding:9px 15px 7px;border:none;border-radius:12px;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;font-size:10.5px;font-weight:${active?600:500};letter-spacing:.01em;transition:all .25s;background:${active?'linear-gradient(135deg,rgba(91,140,255,0.95),rgba(168,85,247,0.95))':'transparent'};color:${active?'#fff':'#8b93ad'};box-shadow:${active?'0 8px 20px -8px rgba(124,90,255,0.85)':'none'};`; }
+  agentStatusStyle(s){ const m={queued:['Queued','#8b93ad'],scanning:['Scanning','#7c8cff'],scoring:['Scoring','#38bdf8'],done:['Done','#34d399']}; const v=m[s]||m.queued; return {label:v[0], style:`color:${v[1]};background:${this.hexA(v[1],0.14)};`}; }
+  agentBarPct(s){ return ({queued:6,scanning:46,scoring:80,done:100})[s]||0; }
+
+  renderVals(){
+    const st=this.state;
+    const sel=st.ranked.find(n=>n.id===st.selectedId)||st.ranked[0];
+    const running=st.phase==='running';
+    const showRail=running||st.agentPanelOpen, showDetail=!showRail, t=st.scoreT;
+    const navDim=this.activeLayerFromNav();
+    const dimLabel={overall:'Match',commute:'Commute',rent:'Affordability',amenities:'Amenities',lifestyle:'Lifestyle',growth:'Growth',safety:'Safety',transit:'Transit'};
+    const results=st.ranked.slice(0,7).map(nb=>{
+      const tag=this.tagFor(nb), col=this.dimColor(nb.overall), showDim=navDim!=='overall', dv=showDim?this.layerScore(nb,navDim):0;
+      return {id:nb.id,rank:nb.rank,name:nb.name,scoreDisplay:Math.round(nb.overall*t),commuteLabel:`${nb.comLo}\u2013${nb.comHi} min`,rentLabel:this.fmtRange(nb),tag:tag.t,badgeStyle:this.badgeStyle(col),tagStyle:this.tagStyle(tag.c),selected:nb.id===st.selectedId,rowStyle:this.rowStyle(nb.id===st.selectedId),showDim,dimLabel:dimLabel[navDim],dimBarStyle:`width:${dv}%;background:${this.dimColor(dv)};`,onClick:()=>this.selectNb(nb.id)};
+    });
+    const agentItems=st.agents.map(a=>{
+      const ss=this.agentStatusStyle(a.status);
+      const sc=a.score==null?null:Math.round(a.score*(st.phase==='done'?t:1));
+      return {id:a.id,name:a.name,tag:a.tag,iconEl:this.icon(this.ICONS[a.id],{size:18,stroke:a.color}),statusLabel:ss.label,statusStyle:ss.style,lines:a.lines||[],showLines:running,thinking:running&&(a.status==='scanning'||a.status==='scoring'),showFinding:showRail&&!running,finding:this.agentFinding(a.id,sel),scoreText:sc==null?'\u00b7\u00b7':String(sc),scoreColor:`color:${a.color};`,iconWrapStyle:`color:${a.color};background:${this.hexA(a.color,0.12)};border:1px solid ${this.hexA(a.color,0.3)};`,barStyle:`width:${this.agentBarPct(a.status)}%;background:${a.color};`};
+    });
+    const cons=this.consensus(sel.overall);
+    const L=st.layers;
+    return {
+      scale:st.scale, zoom:st.zoom, mapFilter: st.bright?'brightness(1.16) saturate(1.08)':'none',
+      prompt:st.prompt, onPrompt:e=>this.setState({prompt:e.target.value}), onPromptKey:e=>{ if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){ e.preventDefault(); this.runAgents(); } },
+      run:()=>this.runAgents(), runLabel:running?'Scanning\u2026':'Run City Agents', runDisabled:running, runIcon:running?this.spinnerEl():this.icon(this.ICONS.spark,{size:16,stroke:'#fff'}),
+      blobs:this.buildBlobs(), markers:this.buildMarkers(), fx:this.buildFx(),
+      results, running, ready:!running,
+      agentItems, priorities:this.priorityChips(),
+      showRail, showDetail,
+      railTitle: running?(st.consensus?'Forming consensus':'Scanning Toronto'):'Agent breakdown',
+      railSub: running?(st.runStyle==='cascade'?'reporting in sequence':'radar sweep, all live'):`for ${sel.name}`,
+      railClosable: !running, closeRail:()=>this.setState({agentPanelOpen:false,navMode:'overview'}),
+      railDotAnim: running?'animation:blink 1s infinite;':'',
+      whyList:this.buildWhy(sel),
+      selName:sel.name, selScore:Math.round(sel.overall*t), selScoreStyle:this.badgeStyle(this.dimColor(sel.overall)),
+      consensusLabel:cons.label, consensusStyle:this.tagStyle(cons.color),
+      rentRange:this.fmtRange(sel), trendPct:`${sel.trend>0?'+':''}${sel.trend}%`, trendColor:sel.trend>=0?'#34d399':'#f87171', trendArrow:sel.trend>=0?'\u2197':'\u2198',
+      spark:this.buildSpark(sel), tradeoff:`Trade-off: ${sel.tradeoff}`,
+      addCompare:()=>this.toggleCompare(sel.id), compareLabel:st.compare.includes(sel.id)?'Added to Compare':'Add to Compare', compareHeartFill:st.compare.includes(sel.id)?'#f472b6':'none',
+      activeLayerLabel: dimLabel[navDim]+(navDim==='overall'?' (composite)':''),
+      navOverview:()=>this.setNav('overview'), navAgents:()=>this.setNav('agents'), navCommute:()=>this.setNav('commute'), navAfford:()=>this.setNav('affordability'), navLife:()=>this.setNav('lifestyle'), navGrowth:()=>this.setNav('growth'),
+      nsOverview:this.navItemStyle(st.navMode==='overview'), nsAgents:this.navItemStyle(st.navMode==='agents'||st.agentPanelOpen), nsCommute:this.navItemStyle(st.navMode==='commute'), nsAfford:this.navItemStyle(st.navMode==='affordability'), nsLife:this.navItemStyle(st.navMode==='lifestyle'), nsGrowth:this.navItemStyle(st.navMode==='growth'),
+      tgSafety:()=>this.toggleLayer('safety'), tgRent:()=>this.toggleLayer('rent'), tgCommute:()=>this.toggleLayer('commute'), tgAmen:()=>this.toggleLayer('amenities'), tgTransit:()=>this.toggleLayer('transit'),
+      swSafety:this.switchStyle(L.safety), swRent:this.switchStyle(L.rent), swCommute:this.switchStyle(L.commute), swAmen:this.switchStyle(L.amenities), swTransit:this.switchStyle(L.transit),
+      knobSafety:this.knobStyle(L.safety), knobRent:this.knobStyle(L.rent), knobCommute:this.knobStyle(L.commute), knobAmen:this.knobStyle(L.amenities), knobTransit:this.knobStyle(L.transit),
+      setCascade:()=>this.setRunStyle('cascade'), setRadar:()=>this.setRunStyle('radar'), cascadeStyle:this.segStyle(st.runStyle==='cascade'), radarStyle:this.segStyle(st.runStyle==='radar'),
+      zoomIn:()=>this.zoomBy(0.12), zoomOut:()=>this.zoomBy(-0.12), toggleBright:()=>this.toggleBright(),
+      compareCount:st.compare.length, openCompare:()=>this.setState({compareOpen:true}), closeCompare:()=>this.setState({compareOpen:false}), compareOpen:st.compareOpen, compareRows:this.compareRows()
+    };
+  }
+}
+</script>
+</body>
+</html>
