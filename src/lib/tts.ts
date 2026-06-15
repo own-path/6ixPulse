@@ -35,7 +35,20 @@ export function preloadKokoro(): void {
 
 // Synthesize text and return an object-URL for an audio blob. Caller plays + revokes it.
 export async function synthesizeKokoro(text: string, voice: string = DEFAULT_VOICE): Promise<string> {
-  const model = await loadModel();
-  const audio = await model.generate(text, { voice });
-  return URL.createObjectURL(audio.toBlob());
+  // Serialize generation: Kokoro is a single in-browser WASM model, so overlapping generate()
+  // calls thrash the main thread (freezing scroll) and corrupt each other's output. Chaining
+  // them keeps the UI responsive and makes playback reliable when switching neighbourhoods.
+  const run = generationQueue.then(async () => {
+    const model = await loadModel();
+    const audio = await model.generate(text, { voice });
+    return URL.createObjectURL(audio.toBlob());
+  });
+  // Keep the queue alive even if this job fails, so later jobs still run.
+  generationQueue = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
 }
+
+let generationQueue: Promise<unknown> = Promise.resolve();

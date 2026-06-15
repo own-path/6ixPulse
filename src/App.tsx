@@ -96,7 +96,6 @@ const RESEARCH_TOUR_OVERVIEW_MS = 0;
 // Must match TOUR_DWELL_MS in MapCanvas: the camera dwells on each area while it is researched.
 const RESEARCH_TOUR_VISIT_MS = 5400;
 const RESEARCH_TOUR_SETTLE_MS = 520;
-const SUMMARY_AUDIO_PRELOAD_LIMIT = 6;
 const SUMMARY_AUDIO_CACHE_LIMIT = 10;
 const summaryAudioCache = new Map<string, SummaryAudioCacheEntry>();
 
@@ -385,7 +384,7 @@ export default function App() {
         </span>
         <span>
           <strong>6ixPulse</strong>
-          <small>Agentic Toronto housing intelligence</small>
+          <small>Find your Toronto neighbourhood, agent-researched</small>
         </span>
       </header>
 
@@ -746,17 +745,6 @@ function DetailPanel({
     [selected, recommendation, webResearch],
   );
   const audioKey = useMemo(() => summaryAudioKey(selected.id, spokenText), [selected.id, spokenText]);
-  const preloadAudioItems = useMemo(
-    () =>
-      ranked.slice(0, SUMMARY_AUDIO_PRELOAD_LIMIT).map((neighborhood) => {
-        const text = buildSpokenSummary(neighborhood, recommendation, webResearch);
-        return {
-          key: summaryAudioKey(neighborhood.id, text),
-          text,
-        };
-      }),
-    [ranked, recommendation, webResearch],
-  );
   const shouldPrepareAudio = Boolean(recommendation?.summary);
 
   const stopPlaybackOnly = useCallback(() => {
@@ -777,38 +765,18 @@ function DetailPanel({
     setAudioState(shouldPrepareAudio ? "ready" : "idle");
   }, [shouldPrepareAudio]);
 
+  // Stop any playback and reset state when the neighbourhood or summary changes. Audio is
+  // generated ONLY when the user clicks Play (in togglePlay) — never eagerly — so the heavy
+  // in-browser TTS never blocks scrolling or the rest of the UI.
   useEffect(() => {
-    if (!shouldPrepareAudio) {
-      return;
-    }
-    preloadAudioItems.forEach((item) => prepareSummaryAudio(item.key, item.text));
-    pruneSummaryAudioCache(new Set(preloadAudioItems.map((item) => item.key)));
-  }, [preloadAudioItems, shouldPrepareAudio]);
-
-  useEffect(() => {
-    const req = (reqRef.current += 1);
+    reqRef.current += 1;
     stopPlaybackOnly();
-    if (!shouldPrepareAudio) {
-      setAudioState("idle");
-      return () => {
-        if (reqRef.current === req) reqRef.current += 1;
-        stopPlaybackOnly();
-      };
-    }
-
-    const entry = prepareSummaryAudio(audioKey, spokenText);
-    setAudioState(entry.status === "ready" || entry.status === "error" ? "ready" : "generating");
-    if (entry.status === "generating") {
-      void entry.promise?.then(() => {
-        if (reqRef.current === req) setAudioState("ready");
-      });
-    }
-
+    setAudioState(shouldPrepareAudio ? "ready" : "idle");
     return () => {
-      if (reqRef.current === req) reqRef.current += 1;
+      reqRef.current += 1;
       stopPlaybackOnly();
     };
-  }, [audioKey, shouldPrepareAudio, spokenText, stopPlaybackOnly]);
+  }, [audioKey, shouldPrepareAudio, stopPlaybackOnly]);
 
   const togglePlay = async () => {
     if (audioState === "generating") return;
