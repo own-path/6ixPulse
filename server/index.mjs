@@ -97,9 +97,18 @@ const server = createServer(async (request, response) => {
         intent: localRun.parsed,
         candidateSource: discovered?.length ? "model-discovered" : "seed-fallback",
         targetNeighborhoods: localRun.ranked.slice(0, 3).map((row) => row.name),
-        dimensions: ["affordability", "commute", "safety", "lifestyle", "growth"],
+        // A task for every City Agent. Each researches its own dimension from a named source;
+        // the Recommendation agent runs last and weighs all of their findings together.
+        cityAgents: [
+          { agent: "affordability", researches: "typical rent vs the renter budget", source: "CMHC market context + density model" },
+          { agent: "commute", researches: "time to Union Station + transit access", source: "TTC + GO Transit (Metrolinx), distance" },
+          { agent: "safety", researches: "reported neighbourhood crime rate", source: "Toronto Police Service" },
+          { agent: "lifestyle", researches: "cafes, parks, amenities, street life", source: "OpenStreetMap" },
+          { agent: "growth", researches: "development activity and trend", source: "OpenStreetMap + building permits" },
+          { agent: "recommendation", researches: "synthesis of every agent's findings + sources", source: "all of the above" },
+        ],
         strategy:
-          "Discover fitting neighbourhoods, gather official Toronto Open Data + deep web evidence per area, then synthesise only source-backed claims.",
+          "Discover fitting neighbourhoods, run a researcher per City Agent over official Toronto data, then the Recommendation agent decides from all agents' sourced findings.",
       };
       localRun.plan = plan;
       localRun.trace.unshift({
@@ -150,7 +159,7 @@ const server = createServer(async (request, response) => {
             tool: `agent_${note.id}`,
             status: "done",
             input: { worker: note.model },
-            output: { finding: note.finding, confidence: note.confidence },
+            output: { finding: note.finding, confidence: note.confidence, sources: note.sources || [] },
           });
         }
       }
@@ -189,8 +198,20 @@ const server = createServer(async (request, response) => {
       if (fanout?.length) {
         result.agents = result.agents.map((agent) => {
           const note = fanout.find((item) => item.id === agent.id);
-          return note ? { ...agent, finding: note.finding } : agent;
+          return note?.finding ? { ...agent, finding: note.finding } : agent;
         });
+
+        // Give the Recommendation agent its summary plus the sources gathered by EVERY agent.
+        const recNote = fanout.find((item) => item.id === "recommendation");
+        if (recNote && result.recommendation) {
+          if (recNote.finding) result.recommendation.summary = recNote.finding;
+          const agentSources = new Set();
+          for (const note of fanout) for (const name of note.sources || []) agentSources.add(name);
+          const named = [...agentSources].map((name) => ({ sourceId: name, note: "Used by a City Agent" }));
+          const existing = result.recommendation.citations || [];
+          const seen = new Set(existing.map((c) => c.sourceId));
+          result.recommendation.citations = [...existing, ...named.filter((c) => !seen.has(c.sourceId))];
+        }
       }
       writeJson(response, 200, result);
       return;

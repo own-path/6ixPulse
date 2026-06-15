@@ -49,8 +49,9 @@ const basemapConfig = {
   colorTransitLabels: "#465f83",
 };
 
-// How long the camera stays parked on each neighbourhood while it is being researched.
-const TOUR_DWELL_MS = 4600;
+// How long the camera stays on each neighbourhood (flight + settled dwell) before the
+// zoom-out/zoom-in transition to the next.
+const TOUR_DWELL_MS = 5400;
 
 type SignalLayerState = Partial<Record<LayerKey, boolean>>;
 type ResearchTour = {
@@ -280,11 +281,10 @@ export default function MapCanvas({
     map.stop();
     onTourStepRef.current(null);
 
-    // Stay parked on each neighbourhood while the agent researches it — no zoom-out to the
-    // city between stops. A long dwell + a slow "studying" drift reads as deliberate research
-    // instead of a quick flyby. The camera rests on the last area until the run resolves.
+    // Zoom into each neighbourhood and STAY while its agents research it, then fly out-and-in
+    // to the next: flyTo arcs the camera up (zoom-out) then back down (zoom-in) for a smooth
+    // transition. The camera rests on the last area until the run resolves.
     const DWELL_MS = TOUR_DWELL_MS;
-    const FLY_MS = 1500;
 
     stops.forEach((neighborhood, index) => {
       scheduleTour(() => {
@@ -293,29 +293,15 @@ export default function MapCanvas({
         lastSelectedIdRef.current = neighborhood.id;
         onTourStepRef.current(neighborhood.id);
 
-        mapRef.current.easeTo({
+        mapRef.current.flyTo({
           center: neighborhood.center,
-          zoom: 14.1,
+          zoom: 14.2,
           pitch: pitched ? 66 : 0,
-          bearing: pitched ? -22 : 0,
-          duration: index === 0 ? 1100 : FLY_MS,
-          easing: easeInOutCubic,
+          bearing: pitched ? -22 + (index % 2 === 0 ? 5 : -5) : 0,
+          curve: 1.9, // higher arc => the camera lifts (zooms out) more between areas
+          speed: 1.5, // unhurried, smooth flight so most of the dwell is spent settled in
           essential: true,
         });
-
-        // Gentle settle drift so it doesn't look frozen while "finding everything".
-        scheduleTour(() => {
-          if (!researchTour || researchTour.runId !== runId || !mapRef.current) return;
-          if (lastSelectedIdRef.current !== neighborhood.id) return;
-          mapRef.current.easeTo({
-            center: neighborhood.center,
-            zoom: 14.35,
-            bearing: pitched ? -28 : 0,
-            duration: DWELL_MS - FLY_MS - 200,
-            easing: (t: number) => t,
-            essential: true,
-          });
-        }, FLY_MS + 120);
       }, index * DWELL_MS);
     });
 

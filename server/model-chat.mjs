@@ -32,6 +32,40 @@ function firstAvailable(has) {
   return null;
 }
 
+function availability(env) {
+  return {
+    nvidia: Boolean(env.NVIDIA_API_KEY || env.NGC_API_KEY),
+    llamacpp: env.LLAMACPP_ENABLED === "1",
+    ollama: Boolean(env.OLLAMA_MODEL || env.AGENT_OLLAMA_MODEL),
+    hf: Boolean(env.HF_TOKEN || env.HUGGINGFACEHUB_API_TOKEN || env.HUGGING_FACE_HUB_TOKEN),
+  };
+}
+
+// The MAIN agentic brain that makes decisions. Nemotron (nvidia) is the default; when it is
+// not keyed, prefer another capable model (HF) over the tiny local llama.cpp model — that 0.5B
+// is the summariser, not a reasoner, so it is only the main brain as a last resort.
+export function resolveMainProvider(env = process.env) {
+  const has = availability(env);
+  const raw = (env.AGENT_MODEL_PROVIDER || env.AGENT_PROVIDER || "auto").toLowerCase();
+  if (raw !== "auto" && raw !== "" && has[raw]) return raw;
+  if (has.nvidia) return "nvidia";
+  if (has.hf) return "hf";
+  if (has.ollama) return "ollama";
+  if (has.llamacpp) return "llamacpp";
+  return null;
+}
+
+// The lightweight "assistant" model used for summarisation. Defaults to the small local
+// OpenBMB/llama.cpp model so it offloads summarising from the main Nemotron brain; falls
+// back to the main agentic model if no dedicated summariser is available.
+export function resolveSummarizerProvider(env = process.env) {
+  const has = availability(env);
+  const raw = (env.AGENT_SUMMARIZER_PROVIDER || "llamacpp").toLowerCase();
+  if (raw && raw !== "auto" && has[raw]) return raw;
+  if (has.llamacpp) return "llamacpp";
+  return resolveMainProvider(env);
+}
+
 function endpointFor(provider, env) {
   if (provider === "nvidia") {
     const base = env.NVIDIA_BASE_URL || "https://integrate.api.nvidia.com/v1";

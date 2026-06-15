@@ -1,4 +1,4 @@
-import { agenticChat, resolveActiveProvider } from "./model-chat.mjs";
+import { agenticChat, resolveMainProvider } from "./model-chat.mjs";
 
 // No hardcoded neighbourhood list: the agentic model discovers which Toronto areas fit the
 // renter's prompt and supplies approximate coordinates, which the map turns into blobs.
@@ -24,7 +24,7 @@ export async function discoverNeighborhoods(prompt, env = process.env) {
   // Discovery needs world knowledge: try the active brain first, then fall back to a capable
   // model (HF) before ever falling back to the seed list — so "nothing hardcoded" holds even
   // when the active model is a tiny local GGUF that cannot name real neighbourhoods.
-  const active = resolveActiveProvider(env);
+  const active = resolveMainProvider(env);
   let result = await agenticChat(messages, env, opts);
   let discovered = result ? extractDiscovered(safeJson(result.content)) : null;
   if ((!discovered || discovered.length < 3) && active !== "hf" && env.HF_TOKEN) {

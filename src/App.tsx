@@ -83,7 +83,7 @@ const layerLabels: Record<LayerKey, string> = {
 const RESEARCH_TOUR_LIMIT = 5;
 const RESEARCH_TOUR_OVERVIEW_MS = 0;
 // Must match TOUR_DWELL_MS in MapCanvas: the camera dwells on each area while it is researched.
-const RESEARCH_TOUR_VISIT_MS = 4600;
+const RESEARCH_TOUR_VISIT_MS = 5400;
 const RESEARCH_TOUR_SETTLE_MS = 520;
 
 export default function App() {
