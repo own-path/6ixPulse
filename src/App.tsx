@@ -88,8 +88,21 @@ const RESEARCH_TOUR_OVERVIEW_MS = 0;
 const RESEARCH_TOUR_VISIT_MS = 5400;
 const RESEARCH_TOUR_SETTLE_MS = 520;
 
+// Quick-start chips above the composer. They are just shortcuts — the real entry point is
+// whatever the user types in the box.
+const SUGGESTED_PROMPTS: Array<{ label: string; prompt: string }> = [
+  {
+    label: "Safe & walkable near Union",
+    prompt: "I make $80k, work near Union, want safe streets, cafes, under 40 min commute, max rent $2,200.",
+  },
+  {
+    label: "Family-friendly with parks",
+    prompt: "Family-friendly area with good schools and parks, under 45 min to downtown, max rent $2,800.",
+  },
+];
+
 export default function App() {
-  const [prompt, setPrompt] = useState(defaultPrompt);
+  const [prompt, setPrompt] = useState("");
   const [parsed, setParsed] = useState<ParsedPrompt>(initialParsed);
   const [ranked, setRanked] = useState<RankedNeighborhood[]>(initialRanked);
   const [selectedId, setSelectedId] = useState(initialRanked[0].id);
@@ -142,21 +155,23 @@ export default function App() {
     ? `${layerLabels[activeLayer]} evidence`
     : `${layerLabels[activeLayer]}${activeLayer === "overall" ? " candidates" : ""}`;
 
-  const runAgents = () => {
+  const runAgents = (promptText: string = prompt) => {
     if (phase === "running") return;
+    const ask = promptText.trim();
+    if (!ask) return;
 
-    const nextParsed = parsePrompt(prompt);
+    const nextParsed = parsePrompt(ask);
     const nextRanked = rankNeighborhoods(nextParsed);
     const top = nextRanked[0];
     const runId = runSeqRef.current + 1;
     const tourIds = researchTourIds(nextRanked);
     const tourPromise = waitForResearchTour(tourIds.length);
     runSeqRef.current = runId;
-    const backendPromise = runAgentBackend(prompt);
+    const backendPromise = runAgentBackend(ask);
 
     clearSchedules();
-    // The prompt is in flight; reset the composer back to the template so the next ask starts fresh.
-    setPrompt(defaultPrompt);
+    // The prompt is in flight; clear the composer so the next ask starts from a blank box.
+    setPrompt("");
     setParsed(nextParsed);
     setRanked(nextRanked);
     setPhase("running");
@@ -364,6 +379,21 @@ export default function App() {
           </span>
           <span>Ask 6ixPulse</span>
         </div>
+        <div className="composer-suggestions">
+          {SUGGESTED_PROMPTS.map((suggestion) => (
+            <button
+              key={suggestion.label}
+              type="button"
+              className="suggestion-chip"
+              onClick={() => runAgents(suggestion.prompt)}
+              disabled={phase === "running"}
+              title={suggestion.prompt}
+            >
+              <Sparkles size={12} />
+              {suggestion.label}
+            </button>
+          ))}
+        </div>
         <div className="composer-input-row">
           <textarea
             value={prompt}
@@ -375,13 +405,13 @@ export default function App() {
               }
             }}
             rows={2}
-            placeholder="Budget, commute, safety, cafes..."
+            placeholder="Describe your ideal place — budget, commute, safety, vibe…"
           />
           <button
             type="button"
             className={`primary-action send-action ${phase === "running" ? "is-running" : ""}`}
-            onClick={runAgents}
-            disabled={phase === "running"}
+            onClick={() => runAgents()}
+            disabled={phase === "running" || !prompt.trim()}
             aria-label={phase === "running" ? "6ixPulse is mapping" : "Ask 6ixPulse"}
           >
             {phase === "running" ? <LoaderCircle size={17} /> : <SendHorizontal size={17} />}
