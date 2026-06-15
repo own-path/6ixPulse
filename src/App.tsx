@@ -115,6 +115,7 @@ const SUGGESTED_PROMPTS: Array<{ label: string; prompt: string }> = [
 
 export default function App() {
   const [prompt, setPrompt] = useState("");
+  const [hasRun, setHasRun] = useState(false);
   const [parsed, setParsed] = useState<ParsedPrompt>(initialParsed);
   const [ranked, setRanked] = useState<RankedNeighborhood[]>(initialRanked);
   const [selectedId, setSelectedId] = useState(initialRanked[0].id);
@@ -156,7 +157,10 @@ export default function App() {
   );
 
   const activeLayer = activeLayerFromNav(navMode);
-  const showRail = phase === "running" || agentPanelOpen;
+  const panelsVisible = hasRun || phase === "running";
+  const visibleRanked = panelsVisible ? ranked : [];
+  const visibleSelectedId = panelsVisible ? selected.id : "";
+  const showRail = panelsVisible && (phase === "running" || agentPanelOpen);
   const tourFocusName = tourFocusId
     ? ranked.find((neighborhood) => neighborhood.id === tourFocusId)?.name
     : null;
@@ -183,6 +187,7 @@ export default function App() {
 
     clearSchedules();
     // The prompt is in flight; clear the composer so the next ask starts from a blank box.
+    setHasRun(true);
     setPrompt("");
     setParsed(nextParsed);
     setRanked(nextRanked);
@@ -359,8 +364,8 @@ export default function App() {
   return (
     <main className={`app-shell ${mapFocus ? "map-focus" : ""}`}>
       <MapCanvas
-        ranked={ranked}
-        selectedId={selected.id}
+        ranked={visibleRanked}
+        selectedId={visibleSelectedId}
         researchTour={researchTour}
         tourFocusId={tourFocusId}
         activeLayer={activeLayer}
@@ -432,29 +437,33 @@ export default function App() {
         </div>
       </section>
 
-      <div className={`active-layer-chip ${phase === "running" ? "running" : ""}`}>
-        <span />
-        <small>{activeChipLead}</small>
-        <strong>{activeChipDetail}</strong>
-      </div>
+      {panelsVisible ? (
+        <>
+          <div className={`active-layer-chip ${phase === "running" ? "running" : ""}`}>
+            <span />
+            <small>{activeChipLead}</small>
+            <strong>{activeChipDetail}</strong>
+          </div>
 
-      <div className="top-actions">
-        <button type="button" onClick={() => setMapFocus((current) => !current)}>
-          {mapFocus ? <Maximize2 size={16} /> : <Minimize2 size={16} />}
-          {mapFocus ? "Panels" : "Map"}
-        </button>
-        <button type="button">
-          <SlidersHorizontal size={16} />
-          Filters
-        </button>
-        <button type="button" onClick={() => setCompareOpen(true)}>
-          <Heart size={16} />
-          Saved
-          <b>{compare.length}</b>
-        </button>
-      </div>
+          <div className="top-actions">
+            <button type="button" onClick={() => setMapFocus((current) => !current)}>
+              {mapFocus ? <Maximize2 size={16} /> : <Minimize2 size={16} />}
+              {mapFocus ? "Panels" : "Map"}
+            </button>
+            <button type="button">
+              <SlidersHorizontal size={16} />
+              Filters
+            </button>
+            <button type="button" onClick={() => setCompareOpen(true)}>
+              <Heart size={16} />
+              Saved
+              <b>{compare.length}</b>
+            </button>
+          </div>
+        </>
+      ) : null}
 
-      {mapFocus ? (
+      {!panelsVisible ? null : mapFocus ? (
         <button type="button" className="collapsed-panel-tab left" onClick={() => setMapFocus(false)}>
           <Layers size={16} />
           <span>Areas</span>
@@ -498,7 +507,7 @@ export default function App() {
         </aside>
       )}
 
-      {mapFocus ? (
+      {!panelsVisible ? null : mapFocus ? (
         <button type="button" className="collapsed-panel-tab right" onClick={() => setMapFocus(false)}>
           {showRail ? <Users size={16} /> : <Shield size={16} />}
           <span>{showRail ? "Agents" : selected.name}</span>
@@ -527,7 +536,7 @@ export default function App() {
         />
       )}
 
-      {compareOpen && (
+      {panelsVisible && compareOpen && (
         <CompareModal
           ranked={ranked}
           selectedId={selected.id}
