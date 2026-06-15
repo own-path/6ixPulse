@@ -153,7 +153,7 @@ The official Build Small Field Guide requires every model to stay under 32B para
 | Gradio Space | Live | https://huggingface.co/spaces/build-small-hackathon/6ixPulse |
 | Demo video | Done | https://youtu.be/kEqx_4M722A |
 | Write-up / field notes | Done | https://huggingface.co/blog/build-small-hackathon/agentic-neighbourhood-research |
-| Social post | Pending | Add a social post link before submission. |
+| Social post | Done | https://www.linkedin.com/posts/darylwanji_huggingface-buildsmallhackathon-share-7472426199063916544-81_l |
 
 Suggested target categories:
 
@@ -366,4 +366,4 @@ Current local verification:
 - ✅ Live Space (Mapbox + NVIDIA secrets set, running Nemotron): <https://huggingface.co/spaces/build-small-hackathon/6ixPulse>
 - ✅ Demo video: <https://youtu.be/kEqx_4M722A>
 - ✅ Write-up / field notes: <https://huggingface.co/blog/build-small-hackathon/agentic-neighbourhood-research>
-- ⏳ Social post — to publish and link.
+- ✅ Social post: <https://www.linkedin.com/posts/darylwanji_huggingface-buildsmallhackathon-share-7472426199063916544-81_l>
