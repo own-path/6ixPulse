@@ -1,6 +1,7 @@
 // Shared "talk to the configured agentic model" helper. Resolves whichever brain is
 // active (Nemotron / llama.cpp+OpenBMB / Ollama / HF) and sends an OpenAI-compatible chat
 // request, so the per-agent fan-out reasons with the SAME agentic model as the synthesiser.
+import { stripReasoning } from "./model-prompt.mjs";
 
 const JSON_GRAMMAR = `root ::= "{" ws members? "}" ws
 members ::= pair ("," ws pair)*
@@ -110,13 +111,24 @@ export async function agenticChat(messages, env = process.env, opts = {}) {
   const payload = {
     model: ep.model,
     messages,
-    temperature: Number(opts.temperature ?? 0.2),
+    temperature: Number(opts.temperature ?? (provider === "nvidia" ? 0.6 : 0.2)),
     max_tokens: Number(opts.maxTokens ?? 220),
     stream: false,
   };
   if (opts.json) {
     if (ep.grammar) payload.grammar = JSON_GRAMMAR;
     else payload.response_format = { type: "json_object" };
+  }
+  // Nemotron reasoning recipe. Thinking is only enabled where the caller asks (the
+  // recommendation/decision), so the many lightweight summary calls stay fast.
+  if (provider === "nvidia") {
+    payload.top_p = Number(env.NVIDIA_TOP_P ?? 0.95);
+    const thinking = Boolean(opts.thinking);
+    payload.chat_template_kwargs = { enable_thinking: thinking };
+    if (thinking) {
+      payload.reasoning_budget = Number(env.NVIDIA_REASONING_BUDGET ?? 4096);
+      payload.max_tokens = Number(opts.maxTokens ?? 4096) + payload.reasoning_budget;
+    }
   }
 
   try {
@@ -131,9 +143,9 @@ export async function agenticChat(messages, env = process.env, opts = {}) {
     });
     if (!response.ok) return null;
     const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content;
-    return typeof content === "string" && content.trim()
-      ? { provider, model: ep.model, content: content.trim() }
+    const content = stripReasoning(data?.choices?.[0]?.message?.content);
+    return content
+      ? { provider, model: ep.model, content }
       : null;
   } catch {
     return null;

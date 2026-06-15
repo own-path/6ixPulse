@@ -26,20 +26,22 @@ export async function runNvidiaAgent(localRun, env = process.env) {
 
   const model = configuredNvidiaModel(env);
   const context = buildModelContext(localRun);
+  // Matches the Nemotron Nano Omni Reasoning recipe (ChatNVIDIA): temperature 0.6, top_p 0.95,
+  // a reasoning_budget, and chat_template_kwargs.enable_thinking. The thinking is returned
+  // separately as message.reasoning_content; the answer (our JSON) is message.content.
+  const thinking = env.NVIDIA_ENABLE_THINKING !== "0";
   const basePayload = {
     model,
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
       { role: "user", content: JSON.stringify(context) },
     ],
-    temperature: Number(env.NVIDIA_TEMPERATURE ?? 0.2),
+    temperature: Number(env.NVIDIA_TEMPERATURE ?? 0.6),
     top_p: Number(env.NVIDIA_TOP_P ?? 0.95),
-    max_tokens: Number(env.NVIDIA_MAX_TOKENS ?? 1200),
+    max_tokens: Number(env.NVIDIA_MAX_TOKENS ?? 8192),
     stream: false,
-    top_k: Number(env.NVIDIA_TOP_K ?? 1),
-    chat_template_kwargs: {
-      enable_thinking: env.NVIDIA_ENABLE_THINKING === "1",
-    },
+    chat_template_kwargs: { enable_thinking: thinking },
+    ...(thinking ? { reasoning_budget: Number(env.NVIDIA_REASONING_BUDGET ?? 4096) } : {}),
   };
 
   const richPayload = {

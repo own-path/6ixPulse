@@ -22,7 +22,7 @@ Return strict JSON only with this shape:
 
 export function parseModelJson(body, label = "model") {
   const content = body?.choices?.[0]?.message?.content;
-  const text = extractContentText(content);
+  const text = stripReasoning(extractContentText(content));
   if (!text) throw new Error(`${label} response did not include message content`);
 
   try {
@@ -35,6 +35,15 @@ export function parseModelJson(body, label = "model") {
     }
     throw new Error(`${label} response was not valid JSON`);
   }
+}
+
+// Reasoning models (Nemotron with enable_thinking) can wrap their chain-of-thought in
+// <think>...</think> before the JSON answer; strip it so only the answer is parsed.
+export function stripReasoning(text) {
+  return String(text || "")
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .replace(/<\/?think>/gi, "")
+    .trim();
 }
 
 export function extractContentText(content) {

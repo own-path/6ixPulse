@@ -30,14 +30,26 @@ export async function runAgentFanOut(localRun, env = process.env) {
   const summarizeChain = [summarizer, mainProvider].filter((p, i, a) => p && a.indexOf(p) === i);
   const decideChain = [mainProvider, summarizer].filter((p, i, a) => p && a.indexOf(p) === i);
 
-  const findings = [];
-  for (const agent of FANOUT_AGENTS) {
-    const note = await runOneAgent(agent, selected, webResearch, summarizeChain, env);
-    if (note) findings.push(note);
+  // Hosted APIs (Nemotron/HF) handle concurrency, so fan the agents out in parallel to stay
+  // within the response budget; a local llama.cpp server is run sequentially to avoid choking.
+  const parallel = summarizer !== "llamacpp" && mainProvider !== "llamacpp";
+  let findings;
+  if (parallel) {
+    findings = (
+      await Promise.all(
+        FANOUT_AGENTS.map((agent) => runOneAgent(agent, selected, webResearch, summarizeChain, env)),
+      )
+    ).filter(Boolean);
+  } else {
+    findings = [];
+    for (const agent of FANOUT_AGENTS) {
+      const note = await runOneAgent(agent, selected, webResearch, summarizeChain, env);
+      if (note) findings.push(note);
+    }
   }
 
-  // Recommendation agent runs LAST on the main brain, with every other agent's finding + all
-  // their sources.
+  // Recommendation agent runs LAST on the main brain (with thinking), weighing every other
+  // agent's finding + all their sources.
   if (findings.length) {
     const recommendation = await runRecommendationAgent(findings, selected, decideChain, env);
     if (recommendation) findings.push(recommendation);
@@ -85,12 +97,13 @@ async function runOneAgent(agent, selected, webResearch, providerChain, env) {
 }
 
 // Try each provider in the chain until one returns a plausible, parseable finding.
-async function chatFinding(messages, providerChain, env) {
+async function chatFinding(messages, providerChain, env, opts = {}) {
   for (const provider of providerChain) {
     const result = await agenticChat(messages, env, {
       provider,
       json: true,
       maxTokens: 220,
+      thinking: Boolean(opts.thinking),
       timeoutMs: Number(env.AGENT_FANOUT_TIMEOUT_MS || 45000),
     });
     if (!result) continue;
@@ -135,7 +148,7 @@ async function runRecommendationAgent(findings, selected, providerChain, env) {
     },
   ];
 
-  const finding = await chatFinding(messages, providerChain, env);
+  const finding = await chatFinding(messages, providerChain, env, { thinking: true });
   // Keep the aggregated sources even if the decision text didn't come back cleanly.
   return {
     id: "recommendation",
