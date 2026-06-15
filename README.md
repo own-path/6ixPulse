@@ -33,6 +33,8 @@ models:
 
 6ixPulse is an agentic Toronto housing intelligence map for renters who do not want to choose a neighborhood from vibes, stale listicles, or one-off anecdotes.
 
+**▶️ [Live demo](https://huggingface.co/spaces/build-small-hackathon/6ixPulse) · 🎥 [Demo video](https://youtu.be/kEqx_4M722A) · 📝 [Write-up / field notes](https://huggingface.co/blog/build-small-hackathon/agentic-neighbourhood-research)**
+
 ## Codex Attribution
 
 This repository was developed with assistance from OpenAI Codex for implementation, debugging, verification, and repository preparation. Product direction, final decisions, and submission review remain human-owned.
@@ -148,8 +150,9 @@ The official Build Small Field Guide requires every model to stay under 32B para
 | Custom UI | On track | The app is a custom map-first interface rather than default Gradio components. |
 | README tags | Done | Tags are in the YAML block at the top of this README. |
 | Codex prize | Done | This README includes Codex attribution, and the repo is being prepared and pushed through Codex. Keep Codex-attributed commits in the connected GitHub repo or Space history. |
-| Gradio Space | Uploaded | Live Space: https://huggingface.co/spaces/build-small-hackathon/6ixPulse. Add Space secrets before judging so Mapbox and NVIDIA calls are live. |
-| Demo video | Pending | Add a public demo video link before submission. |
+| Gradio Space | Live | https://huggingface.co/spaces/build-small-hackathon/6ixPulse |
+| Demo video | Done | https://youtu.be/kEqx_4M722A |
+| Write-up / field notes | Done | https://huggingface.co/blog/build-small-hackathon/agentic-neighbourhood-research |
 | Social post | Pending | Add a social post link before submission. |
 
 Suggested target categories:
@@ -158,7 +161,7 @@ Suggested target categories:
 - Best Agent
 - Best Use of Codex
 - Off Brand
-- Best Demo, once the demo video and social post are ready
+- Best Demo
 
 ## Runtime Flow
 
@@ -358,13 +361,9 @@ Current local verification:
 - TypeScript + Vite production build passes.
 - Browser UI check: map-focus mode collapses the side panels into edge tabs and restores them.
 
-## Submission To Finish
+## Submission
 
-Before final Build Small submission:
-
-1. Add `VITE_MAPBOX_TOKEN` and `NVIDIA_API_KEY` in the Hugging Face Space secrets panel.
-2. Wait for the Docker Space build to finish and confirm the live map loads.
-3. Record and link a demo video.
-4. Publish and link a social post.
-5. Add `NVIDIA_API_KEY` (nvapi-…) to run Nemotron (`nvidia/nemotron-3-nano-omni-30b-a3b-reasoning`), or run a small GGUF locally via `npm run llama:serve` (llama.cpp / OpenBMB).
-6. Keep the GitHub repo or Space history connected with Codex-attributed commits for the Codex prize.
+- ✅ Live Space (Mapbox + NVIDIA secrets set, running Nemotron): <https://huggingface.co/spaces/build-small-hackathon/6ixPulse>
+- ✅ Demo video: <https://youtu.be/kEqx_4M722A>
+- ✅ Write-up / field notes: <https://huggingface.co/blog/build-small-hackathon/agentic-neighbourhood-research>
+- ⏳ Social post — to publish and link.
