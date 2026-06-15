@@ -106,7 +106,7 @@ The official Build Small Field Guide requires every model to stay under 32B para
 | Custom UI | On track | The app is a custom map-first interface rather than default Gradio components. |
 | README tags | Done | Tags are in the YAML block at the top of this README. |
 | Codex prize | On track | This repo is being prepared and pushed through Codex. Keep Codex-attributed commits in the connected GitHub repo or Space history. |
-| Gradio Space | Ready to upload | `app.py` uses `gradio.Server` to serve the React app and expose `/run_agent`; `Dockerfile` builds the Vite app and runs the Node backend inside the Space. |
+| Gradio Space | Uploaded | Live Space: https://huggingface.co/spaces/build-small-hackathon/6ixPulse. Add Space secrets before judging so Mapbox and NVIDIA calls are live. |
 | Demo video | Pending | Add a public demo video link before submission. |
 | Social post | Pending | Add a social post link before submission. |
 
@@ -210,6 +210,12 @@ If a token, model, or provider is unavailable, the API returns a deterministic l
 
 This repo is prepared for a Docker-backed Gradio Space using `gradio.Server`, which is designed for custom frontends like React while still giving the project Gradio's API engine, queuing, MCP support, and Hugging Face Spaces hosting.
 
+Live Space:
+
+```text
+https://huggingface.co/spaces/build-small-hackathon/6ixPulse
+```
+
 The Space entrypoint is:
 
 ```text
@@ -230,6 +236,8 @@ Required Space secrets:
 VITE_MAPBOX_TOKEN=your_mapbox_token
 NVIDIA_API_KEY=your_nvidia_api_key
 ```
+
+Local secrets are intentionally not committed or uploaded. Add these in the Space settings before final judging.
 
 Recommended Space variables:
 
@@ -333,8 +341,8 @@ Current local verification:
 
 Before final Build Small submission:
 
-1. Upload this repo as a Docker-backed Gradio Server Space inside the `build-small-hackathon` Hugging Face org.
-2. Add the live Space URL here.
+1. Add `VITE_MAPBOX_TOKEN` and `NVIDIA_API_KEY` in the Hugging Face Space secrets panel.
+2. Wait for the Docker Space build to finish and confirm the live map loads.
 3. Record and link a demo video.
 4. Publish and link a social post.
 5. Verify the final Space is running `nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16`.
