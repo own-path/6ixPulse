@@ -54,6 +54,15 @@ type ResearchTour = {
   neighborhoodIds: string[];
 };
 type ResearchFact = NonNullable<NonNullable<AgentBackendRun["webResearch"]>["facts"]>[number];
+type SummaryAudioState = "idle" | "generating" | "ready" | "playing";
+type SummaryAudioCacheEntry = {
+  key: string;
+  text: string;
+  url: string | null;
+  status: "generating" | "ready" | "error";
+  promise: Promise<string | null> | null;
+  lastUsed: number;
+};
 
 const initialParsed = parsePrompt(defaultPrompt);
 const initialRanked = rankNeighborhoods(initialParsed);
@@ -87,6 +96,9 @@ const RESEARCH_TOUR_OVERVIEW_MS = 0;
 // Must match TOUR_DWELL_MS in MapCanvas: the camera dwells on each area while it is researched.
 const RESEARCH_TOUR_VISIT_MS = 5400;
 const RESEARCH_TOUR_SETTLE_MS = 520;
+const SUMMARY_AUDIO_PRELOAD_LIMIT = 6;
+const SUMMARY_AUDIO_CACHE_LIMIT = 10;
+const summaryAudioCache = new Map<string, SummaryAudioCacheEntry>();
 
 // Quick-start chips above the composer. They are just shortcuts — the real entry point is
 // whatever the user types in the box.
@@ -506,6 +518,7 @@ export default function App() {
         />
       ) : (
         <DetailPanel
+          ranked={ranked}
           selected={selected}
           parsed={parsed}
           scoreT={scoreT}
@@ -701,12 +714,14 @@ function ResultRow({
 }
 
 function DetailPanel({
+  ranked,
   selected,
   parsed,
   scoreT,
   webResearch,
   recommendation,
 }: {
+  ranked: RankedNeighborhood[];
   selected: RankedNeighborhood;
   parsed: ParsedPrompt;
   scoreT: number;
@@ -714,57 +729,137 @@ function DetailPanel({
   recommendation: AgentBackendRun["recommendation"] | null;
 }) {
   const fit = consensus(selected.overall);
-  const [audioState, setAudioState] = useState<"idle" | "loading" | "playing">("idle");
+  const [audioState, setAudioState] = useState<SummaryAudioState>("idle");
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const reqRef = useRef(0);
+  const spokenText = useMemo(
+    () => buildSpokenSummary(selected, recommendation, webResearch),
+    [selected, recommendation, webResearch],
+  );
+  const audioKey = useMemo(() => summaryAudioKey(selected.id, spokenText), [selected.id, spokenText]);
+  const preloadAudioItems = useMemo(
+    () =>
+      ranked.slice(0, SUMMARY_AUDIO_PRELOAD_LIMIT).map((neighborhood) => {
+        const text = buildSpokenSummary(neighborhood, recommendation, webResearch);
+        return {
+          key: summaryAudioKey(neighborhood.id, text),
+          text,
+        };
+      }),
+    [ranked, recommendation, webResearch],
+  );
+  const shouldPrepareAudio = Boolean(recommendation?.summary);
 
-  const stopSpeech = useCallback(() => {
-    reqRef.current += 1; // invalidate any in-flight synthesis
+  const stopPlaybackOnly = useCallback(() => {
     if (audioRef.current) {
       audioRef.current.pause();
-      if (audioRef.current.src) URL.revokeObjectURL(audioRef.current.src);
       audioRef.current = null;
     }
     if (typeof window !== "undefined" && window.speechSynthesis) window.speechSynthesis.cancel();
-    setAudioState("idle");
   }, []);
 
-  // Stop narration when the neighbourhood changes or the panel unmounts.
-  useEffect(() => stopSpeech, [selected.id, stopSpeech]);
+  const stopPlayback = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      audioRef.current = null;
+    }
+    if (typeof window !== "undefined" && window.speechSynthesis) window.speechSynthesis.cancel();
+    setAudioState(shouldPrepareAudio ? "ready" : "idle");
+  }, [shouldPrepareAudio]);
 
-  const togglePlay = async () => {
-    if (audioState !== "idle") {
-      stopSpeech();
+  useEffect(() => {
+    if (!shouldPrepareAudio) {
       return;
     }
-    const text = buildSpokenSummary(selected, recommendation, webResearch);
+    preloadAudioItems.forEach((item) => prepareSummaryAudio(item.key, item.text));
+    pruneSummaryAudioCache(new Set(preloadAudioItems.map((item) => item.key)));
+  }, [preloadAudioItems, shouldPrepareAudio]);
+
+  useEffect(() => {
     const req = (reqRef.current += 1);
-    setAudioState("loading");
-    try {
-      const url = await synthesizeKokoro(text);
-      if (reqRef.current !== req) {
-        URL.revokeObjectURL(url);
-        return;
-      }
+    stopPlaybackOnly();
+    if (!shouldPrepareAudio) {
+      setAudioState("idle");
+      return () => {
+        if (reqRef.current === req) reqRef.current += 1;
+        stopPlaybackOnly();
+      };
+    }
+
+    const entry = prepareSummaryAudio(audioKey, spokenText);
+    setAudioState(entry.status === "ready" || entry.status === "error" ? "ready" : "generating");
+    if (entry.status === "generating") {
+      void entry.promise?.then(() => {
+        if (reqRef.current === req) setAudioState("ready");
+      });
+    }
+
+    return () => {
+      if (reqRef.current === req) reqRef.current += 1;
+      stopPlaybackOnly();
+    };
+  }, [audioKey, shouldPrepareAudio, spokenText, stopPlaybackOnly]);
+
+  const togglePlay = async () => {
+    if (audioState === "generating") return;
+    if (audioState === "playing") {
+      stopPlayback();
+      return;
+    }
+
+    const playUrl = async (url: string, req: number) => {
       const element = new Audio(url);
       audioRef.current = element;
       element.onended = () => {
-        URL.revokeObjectURL(url);
-        if (reqRef.current === req) setAudioState("idle");
+        if (reqRef.current === req) {
+          audioRef.current = null;
+          setAudioState("ready");
+        }
       };
-      await element.play();
-      if (reqRef.current === req) setAudioState("playing");
-    } catch {
-      // Kokoro unavailable (still downloading / unsupported) — fall back to the browser voice.
-      if (reqRef.current !== req) return;
-      speakWithBrowser(text, () => {
-        if (reqRef.current === req) setAudioState("idle");
-      });
-      setAudioState("playing");
+      element.onerror = () => {
+        if (reqRef.current === req) {
+          audioRef.current = null;
+          setAudioState("ready");
+        }
+      };
+      try {
+        await element.play();
+        if (reqRef.current === req) setAudioState("playing");
+      } catch {
+        if (reqRef.current !== req) return;
+        audioRef.current = null;
+        speakWithBrowser(spokenText, () => {
+          if (reqRef.current === req) setAudioState("ready");
+        });
+        setAudioState("playing");
+      }
+    };
+
+    const cached = getSummaryAudio(audioKey);
+    if (cached?.url && cached.text === spokenText) {
+      await playUrl(cached.url, reqRef.current);
+      return;
     }
+
+    const req = (reqRef.current += 1);
+    setAudioState("generating");
+    const entry = prepareSummaryAudio(audioKey, spokenText, { force: cached?.status === "error" });
+    const url = await entry.promise;
+    if (reqRef.current !== req) return;
+    if (url) {
+      await playUrl(url, req);
+      return;
+    }
+    // Kokoro unavailable (still downloading / unsupported) — fall back to the browser voice.
+    speakWithBrowser(spokenText, () => {
+      if (reqRef.current === req) setAudioState("ready");
+    });
+    setAudioState("playing");
   };
 
-  const playing = audioState !== "idle";
+  const generating = audioState === "generating";
+  const playing = audioState === "playing";
   const safetyFact = findNeighborhoodFact(webResearch, selected.name, "safety");
   const rentFact = findNeighborhoodFact(webResearch, selected.name, "rent");
   const commuteFact = findNeighborhoodFact(webResearch, selected.name, "commute");
@@ -883,18 +978,21 @@ function DetailPanel({
           </button>
           <button
             type="button"
-            className={`secondary-action ${playing ? "is-playing" : ""}`}
+            className={`secondary-action ${playing ? "is-playing" : ""} ${generating ? "is-generating" : ""}`}
             onClick={togglePlay}
-            aria-label={playing ? "Stop summary audio" : "Play summary audio"}
+            disabled={generating}
+            aria-label={
+              generating ? "Summary audio is being generated" : playing ? "Stop summary audio" : "Play summary audio"
+            }
           >
-            {audioState === "loading" ? (
+            {generating ? (
               <LoaderCircle size={14} className="spin" />
-            ) : audioState === "playing" ? (
+            ) : playing ? (
               <Square size={14} fill="currentColor" />
             ) : (
               <Volume2 size={15} />
             )}
-            {audioState === "loading" ? "Voice…" : audioState === "playing" ? "Stop" : "Play"}
+            {generating ? "Generating audio" : playing ? "Stop" : "Play"}
           </button>
         </div>
       </section>
@@ -1202,15 +1300,91 @@ function openListings(name: string) {
   window.open(`https://rentals.ca/toronto/${slug}`, "_blank", "noopener,noreferrer");
 }
 
+function summaryAudioKey(neighborhoodId: string, text: string) {
+  return `${neighborhoodId}:${hashText(text)}`;
+}
+
+function hashText(text: string) {
+  let hash = 5381;
+  for (let index = 0; index < text.length; index += 1) {
+    hash = (hash * 33) ^ text.charCodeAt(index);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function getSummaryAudio(key: string) {
+  const entry = summaryAudioCache.get(key);
+  if (entry) entry.lastUsed = Date.now();
+  return entry;
+}
+
+function prepareSummaryAudio(key: string, text: string, options: { force?: boolean } = {}) {
+  const existing = summaryAudioCache.get(key);
+  if (
+    existing &&
+    existing.text === text &&
+    !options.force &&
+    (existing.status === "ready" || existing.status === "generating")
+  ) {
+    existing.lastUsed = Date.now();
+    return existing;
+  }
+
+  if (existing?.url) URL.revokeObjectURL(existing.url);
+
+  const entry: SummaryAudioCacheEntry = {
+    key,
+    text,
+    url: null,
+    status: "generating",
+    promise: null,
+    lastUsed: Date.now(),
+  };
+  entry.promise = synthesizeKokoro(text)
+    .then((url) => {
+      entry.url = url;
+      entry.status = "ready";
+      entry.lastUsed = Date.now();
+      return url;
+    })
+    .catch(() => {
+      entry.status = "error";
+      entry.promise = null;
+      entry.lastUsed = Date.now();
+      return null;
+    });
+  summaryAudioCache.set(key, entry);
+  pruneSummaryAudioCache();
+  return entry;
+}
+
+function pruneSummaryAudioCache(keepKeys: Set<string> = new Set()) {
+  if (summaryAudioCache.size <= SUMMARY_AUDIO_CACHE_LIMIT) return;
+  const candidates = [...summaryAudioCache.values()]
+    .filter((entry) => !keepKeys.has(entry.key))
+    .sort((a, b) => a.lastUsed - b.lastUsed);
+  while (summaryAudioCache.size > SUMMARY_AUDIO_CACHE_LIMIT && candidates.length) {
+    const entry = candidates.shift();
+    if (!entry) return;
+    if (entry.url) URL.revokeObjectURL(entry.url);
+    summaryAudioCache.delete(entry.key);
+  }
+}
+
 // A short, spoken-friendly summary of the findings (~15-20s of narration), capped so it
-// never rambles. Leads with the match, then the model's recommendation, then the commute.
+// never rambles. Leads with the selected match, then only uses the model recommendation
+// when it applies to that neighbourhood.
 function buildSpokenSummary(
   selected: RankedNeighborhood,
   recommendation: AgentBackendRun["recommendation"] | null,
   webResearch: AgentBackendRun["webResearch"] | null,
 ) {
-  const parts = [`${selected.name} is your top match, scoring ${selected.overall} out of 100.`];
-  if (recommendation?.summary) parts.push(recommendation.summary);
+  const parts = [`${selected.name} scores ${selected.overall} out of 100 for this search.`];
+  if (recommendation?.selectedId === selected.id && recommendation.summary) {
+    parts.push(recommendation.summary);
+  }
+  const rent = findNeighborhoodFact(webResearch, selected.name, "rent");
+  if (rent) parts.push(`${rent.label}: ${formatFactValue(rent)}.`);
   const commute = findNeighborhoodFact(webResearch, selected.name, "commute");
   if (commute && typeof commute.value === "number") {
     parts.push(`About ${commute.value} minutes to Union Station.`);
