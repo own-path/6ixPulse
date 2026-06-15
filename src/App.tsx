@@ -16,9 +16,11 @@ import {
   Shield,
   SlidersHorizontal,
   Sparkles,
+  Square,
   TrainFront,
   TrendingUp,
   Users,
+  Volume2,
   X,
 } from "lucide-react";
 import MapCanvas from "./components/MapCanvas";
@@ -477,10 +479,8 @@ export default function App() {
           selected={selected}
           parsed={parsed}
           scoreT={scoreT}
-          saved={compare.includes(selected.id)}
           webResearch={webResearch}
           recommendation={recommendation}
-          onToggleSaved={() => toggleCompare(selected.id)}
         />
       )}
 
@@ -674,20 +674,41 @@ function DetailPanel({
   selected,
   parsed,
   scoreT,
-  saved,
   webResearch,
   recommendation,
-  onToggleSaved,
 }: {
   selected: RankedNeighborhood;
   parsed: ParsedPrompt;
   scoreT: number;
-  saved: boolean;
   webResearch: AgentBackendRun["webResearch"] | null;
   recommendation: AgentBackendRun["recommendation"] | null;
-  onToggleSaved: () => void;
 }) {
   const fit = consensus(selected.overall);
+  const [playing, setPlaying] = useState(false);
+
+  const stopSpeech = useCallback(() => {
+    if (typeof window !== "undefined" && window.speechSynthesis) window.speechSynthesis.cancel();
+    setPlaying(false);
+  }, []);
+
+  // Stop narration when the neighbourhood changes or the panel unmounts.
+  useEffect(() => stopSpeech, [selected.id, stopSpeech]);
+
+  const togglePlay = () => {
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
+    if (playing) {
+      stopSpeech();
+      return;
+    }
+    const utterance = new SpeechSynthesisUtterance(buildSpokenSummary(selected, recommendation, webResearch));
+    utterance.rate = 1.02;
+    utterance.pitch = 1;
+    utterance.onend = () => setPlaying(false);
+    utterance.onerror = () => setPlaying(false);
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+    setPlaying(true);
+  };
   const safetyFact = findNeighborhoodFact(webResearch, selected.name, "safety");
   const rentFact = findNeighborhoodFact(webResearch, selected.name, "rent");
   const commuteFact = findNeighborhoodFact(webResearch, selected.name, "commute");
@@ -804,9 +825,14 @@ function DetailPanel({
           >
             View Listings
           </button>
-          <button type="button" className="secondary-action" onClick={onToggleSaved}>
-            <Heart size={15} fill={saved ? "currentColor" : "none"} />
-            {saved ? "Saved" : "Save"}
+          <button
+            type="button"
+            className={`secondary-action ${playing ? "is-playing" : ""}`}
+            onClick={togglePlay}
+            aria-label={playing ? "Stop summary audio" : "Play summary audio"}
+          >
+            {playing ? <Square size={14} fill="currentColor" /> : <Volume2 size={15} />}
+            {playing ? "Stop" : "Play"}
           </button>
         </div>
       </section>
@@ -1119,6 +1145,24 @@ function openListings(name: string) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
   window.open(`https://rentals.ca/toronto/${slug}`, "_blank", "noopener,noreferrer");
+}
+
+// A short, spoken-friendly summary of the findings (~15-20s of narration), capped so it
+// never rambles. Leads with the match, then the model's recommendation, then the commute.
+function buildSpokenSummary(
+  selected: RankedNeighborhood,
+  recommendation: AgentBackendRun["recommendation"] | null,
+  webResearch: AgentBackendRun["webResearch"] | null,
+) {
+  const parts = [`${selected.name} is your top match, scoring ${selected.overall} out of 100.`];
+  if (recommendation?.summary) parts.push(recommendation.summary);
+  const commute = findNeighborhoodFact(webResearch, selected.name, "commute");
+  if (commute && typeof commute.value === "number") {
+    parts.push(`About ${commute.value} minutes to Union Station.`);
+  }
+  const text = parts.join(" ").replace(/\s+/g, " ").trim();
+  const words = text.split(" ");
+  return words.length > 60 ? `${words.slice(0, 60).join(" ").replace(/[,;:]+$/, "")}.` : text;
 }
 
 function TowerLogo() {
