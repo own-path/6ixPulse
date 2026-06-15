@@ -2,8 +2,8 @@ import type { AgentState, ParsedPrompt, RankedNeighborhood } from "./scoring";
 
 export interface AgentBackendRun {
   ok: boolean;
-  mode: "hf" | "nvidia" | "ollama" | "local-fallback";
-  provider?: "nvidia" | "hf" | "ollama" | "auto";
+  mode: "hf" | "nvidia" | "ollama" | "llamacpp" | "local-fallback";
+  provider?: "nvidia" | "hf" | "ollama" | "llamacpp" | "auto";
   model: string | null;
   prompt: string;
   parsed: ParsedPrompt;
@@ -77,7 +77,8 @@ export interface AgentBackendRun {
 
 export async function runAgentBackend(prompt: string): Promise<AgentBackendRun | null> {
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 70000);
+  // Backend budget: research (~40s) + model synthesis + open-data fetch. Keep headroom.
+  const timeout = window.setTimeout(() => controller.abort(), 85000);
 
   try {
     const response = await fetch("/api/agent/run", {

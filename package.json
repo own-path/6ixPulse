@@ -8,6 +8,8 @@
     "dev:api": "node server/index.mjs",
     "dev:full": "node scripts/dev-full.mjs",
     "build": "tsc && vite build",
+    "llama:serve": "bash scripts/llama-server.sh",
+    "trace:share": "node scripts/share-trace.mjs",
     "check:google-search": "node scripts/check-google-search.mjs",
     "preview": "vite preview --host 127.0.0.1"
   },

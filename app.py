@@ -38,8 +38,11 @@ def start_node_backend() -> None:
 
     env = os.environ.copy()
     env.setdefault("AGENT_PORT", str(NODE_BACKEND_PORT))
-    env.setdefault("AGENT_MODEL_PROVIDER", "nvidia")
-    env.setdefault("NVIDIA_MODEL", "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16")
+    # auto = Nemotron (NVIDIA, when NVIDIA_API_KEY is set) -> llama.cpp -> Ollama -> HF,
+    # so the agent always lands on a working brain instead of silently falling back.
+    env.setdefault("AGENT_MODEL_PROVIDER", "auto")
+    # Hosted NIM id. The HF repo "...-BF16" has no inference provider and cannot be called.
+    env.setdefault("NVIDIA_MODEL", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning")
     env.setdefault("SEARCH_PROVIDER", "mcp_open_websearch")
     env.setdefault("MCP_WEB_SEARCH_ENABLED", "1")
     env.setdefault("MCP_WEB_SEARCH_TIMEOUT_MS", "6000")

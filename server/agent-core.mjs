@@ -173,14 +173,14 @@ export function getAgentFinding(id, neighborhood, parsed) {
   return `Agents converge on ${neighborhood.name}: ${consensus(neighborhood.overall).label}. ${neighborhood.short}`;
 }
 
-export function buildLocalAgentRun(prompt) {
+export function buildLocalAgentRun(prompt, rows = neighborhoods) {
   const normalizedPrompt = String(prompt || defaultPrompt).trim() || defaultPrompt;
   const trace = [];
 
   const parsed = traceTool(trace, "parse_renter_intent", { prompt: normalizedPrompt }, () =>
     parsePrompt(normalizedPrompt),
   );
-  const ranked = traceTool(trace, "rank_neighborhoods", parsed, () => rankNeighborhoods(parsed));
+  const ranked = traceTool(trace, "rank_neighborhoods", parsed, () => rankNeighborhoods(parsed, rows));
   const top = ranked[0];
 
   const dimensionChecks = {
@@ -401,9 +401,9 @@ function buildEvidenceRecommendation(run, selected, webResearch, evidenceNotes) 
 }
 
 function sanitizeTrace(trace = []) {
-  const visibleTools = new Set(["parse_renter_intent", "housing_web_research", "hf_reasoning", "nvidia_reasoning", "ollama_reasoning"]);
+  const visibleTools = new Set(["discover_neighborhoods", "plan_research", "parse_renter_intent", "housing_web_research", "hf_reasoning", "nvidia_reasoning", "ollama_reasoning", "llamacpp_reasoning"]);
   return trace
-    .filter((step) => visibleTools.has(step.tool))
+    .filter((step) => visibleTools.has(step.tool) || step.tool.startsWith("agent_"))
     .map((step) => {
       if (step.tool === "parse_renter_intent") return step;
       return {

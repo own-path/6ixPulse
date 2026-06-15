@@ -1,7 +1,11 @@
 node_modules/
 dist/
+.venv/
+.pip-cache/
 .env
 .env.local
 .DS_Store
 .thumbnail
 npm-debug.log*
+BLOG.md
+artifacts/

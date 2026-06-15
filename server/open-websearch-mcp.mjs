@@ -122,7 +122,14 @@ async function handleMessage(line) {
 async function multiEngineSearch(query, count) {
   const seen = new Set();
   const output = [];
-  const engines = [searchDuckDuckGoHtml, searchBingRss];
+  // Bing's RSS feed was removed: it returned entity/dictionary cards ("East - Wikipedia",
+  // "EAST | Merriam-Webster") instead of results — the source of all the junk.
+  // When FlareSolverr is configured (FLARESOLVERR_URL), Google is searched first: a headless
+  // browser solves the Cloudflare/bot checks that block listing/review sites, giving real
+  // person-like deep research with no API key. DuckDuckGo HTML/Lite are the keyless fallback.
+  const engines = flareSolverrUrl()
+    ? [searchGoogle, searchDuckDuckGoHtml, searchDuckDuckGoLite]
+    : [searchDuckDuckGoHtml, searchDuckDuckGoLite];
 
   for (const engine of engines) {
     try {
@@ -130,6 +137,7 @@ async function multiEngineSearch(query, count) {
       for (const result of results) {
         const url = normalizeUrl(result.url);
         if (!url || seen.has(url)) continue;
+        if (!looksRelevant(result, query)) continue;
         seen.add(url);
         output.push({ ...result, url });
         if (output.length >= count) return output;
@@ -140,6 +148,33 @@ async function multiEngineSearch(query, count) {
   }
 
   return output;
+}
+
+// Drop obviously off-topic hits (dictionaries, the compass direction "east", etc.) before
+// they ever reach the agent. A result must share a meaningful word with the query.
+function looksRelevant(result, query) {
+  const hay = `${result.title || ""} ${result.snippet || ""} ${result.url || ""}`.toLowerCase();
+  const stop = new Set(["the", "and", "for", "near", "with", "what", "is", "it", "to", "a", "in", "of", "under"]);
+  const terms = query.toLowerCase().match(/[a-z]{4,}/g) || [];
+  const meaningful = terms.filter((t) => !stop.has(t));
+  if (!meaningful.length) return true;
+  const hits = meaningful.filter((t) => hay.includes(t)).length;
+  return hits >= Math.min(2, meaningful.length);
+}
+
+async function searchDuckDuckGoLite(query, count) {
+  const url = new URL("https://lite.duckduckgo.com/lite/");
+  url.searchParams.set("q", query);
+  const html = await fetchText(url);
+  const results = [];
+  const linkRe = /<a[^>]+class="result-link"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+  let match;
+  while ((match = linkRe.exec(html)) && results.length < count) {
+    const href = unwrapDuckDuckGoUrl(decodeHtml(match[1]));
+    const title = cleanHtml(match[2]);
+    if (title && href) results.push({ title, url: href, snippet: "", engine: "duckduckgo_lite" });
+  }
+  return results;
 }
 
 async function searchDuckDuckGoHtml(query, count) {
@@ -165,21 +200,45 @@ async function searchDuckDuckGoHtml(query, count) {
   return results;
 }
 
-async function searchBingRss(query, count) {
-  const url = new URL("https://www.bing.com/search");
+async function searchGoogle(query, count) {
+  const url = new URL("https://www.google.com/search");
   url.searchParams.set("q", query);
-  url.searchParams.set("format", "rss");
-  const xml = await fetchText(url);
-  const items = xml.match(/<item>[\s\S]*?<\/item>/gi) || [];
-  return items.slice(0, count).map((item) => ({
-    title: cleanHtml(extractTag(item, "title")),
-    url: decodeHtml(extractTag(item, "link")),
-    snippet: cleanHtml(extractTag(item, "description")),
-    engine: "bing_rss",
-  })).filter((item) => item.title && item.url);
+  url.searchParams.set("num", String(Math.min(count + 4, 20)));
+  url.searchParams.set("hl", "en");
+  url.searchParams.set("gl", "ca");
+  const html = await fetchText(url);
+  const results = [];
+  const seen = new Set();
+  // Google wraps each organic result link as <a href="/url?q=<real>&..."> or a direct href.
+  const linkRe = /<a href="(\/url\?q=|https?:\/\/)([^"&]+)[^"]*"[^>]*>/gi;
+  let match;
+  while ((match = linkRe.exec(html)) && results.length < count) {
+    const raw = match[1].startsWith("/url") ? decodeURIComponent(match[2]) : `${match[1]}${match[2]}`;
+    const link = normalizeUrl(decodeHtml(raw));
+    if (!link || seen.has(link)) continue;
+    if (/google\.|gstatic\.|youtube\.com\/redirect|\/search\?/.test(link)) continue;
+    seen.add(link);
+    results.push({ title: domainTitle(link), url: link, snippet: "", engine: "google" });
+  }
+  return results;
+}
+
+function domainTitle(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
+function flareSolverrUrl() {
+  return process.env.FLARESOLVERR_URL || "";
 }
 
 async function fetchText(url) {
+  const solver = flareSolverrUrl();
+  if (solver) return fetchViaFlareSolverr(String(url), solver);
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
   try {
@@ -199,9 +258,33 @@ async function fetchText(url) {
   }
 }
 
-function extractTag(xml, tag) {
-  const match = xml.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i"));
-  return match ? match[1] : "";
+// FlareSolverr (https://github.com/FlareSolverr/FlareSolverr) runs a headless browser that
+// solves Cloudflare/bot challenges, so listing and review sites that block plain fetches
+// become readable — no API key, just a local container:
+//   docker run -d -p 8191:8191 ghcr.io/flaresolverr/flaresolverr:latest
+async function fetchViaFlareSolverr(targetUrl, solverBase) {
+  const endpoint = `${solverBase.replace(/\/$/, "")}/v1`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), Number(process.env.FLARESOLVERR_TIMEOUT_MS || 45000));
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        cmd: "request.get",
+        url: targetUrl,
+        maxTimeout: Number(process.env.FLARESOLVERR_MAX_TIMEOUT_MS || 40000),
+      }),
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`FlareSolverr HTTP ${response.status}`);
+    const data = await response.json();
+    const html = data?.solution?.response;
+    if (!html) throw new Error("FlareSolverr returned no page content");
+    return html;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function unwrapDuckDuckGoUrl(url) {

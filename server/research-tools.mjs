@@ -542,12 +542,87 @@ async function runAuthoritativeResearch(localRun, env) {
     );
   }
 
+  // Map coordinates only (not shown as a research source): a no-key lookup of each area's
+  // centre so the map can place dynamically-discovered neighbourhoods. The user-facing
+  // housing evidence comes from official data + deep web research, not encyclopedia text.
+  try {
+    facts.push(...(await fetchNeighborhoodGeoFacts(targetNeighborhoods, env)));
+  } catch {
+    /* coordinates are optional; ignore lookup failures */
+  }
+
   return {
     targetNeighborhoods,
     sources,
     facts,
     limitations,
   };
+}
+
+async function fetchNeighborhoodGeoFacts(neighborhoods, env) {
+  const facts = [];
+  const timeoutMs = positiveInt(env.WIKIPEDIA_TIMEOUT_MS, 8000);
+  const summaries = await Promise.all(
+    neighborhoods.map((neighborhood) => fetchWikipediaSummary(neighborhood, timeoutMs)),
+  );
+
+  summaries.forEach((summary, index) => {
+    if (!summary?.coordinates) return;
+    facts.push({
+      id: `F-geo-${normalizeName(neighborhoods[index])}`,
+      sourceId: "",
+      category: "geo",
+      neighborhood: neighborhoods[index],
+      label: "Approximate centre",
+      value: `${summary.coordinates.lat.toFixed(4)}, ${summary.coordinates.lon.toFixed(4)}`,
+      unit: "lat, lon",
+      detail: "Map placement only; not a user-facing housing claim.",
+      reliability: "medium",
+      generatedFrom: ["geo_lookup"],
+      lat: summary.coordinates.lat,
+      lon: summary.coordinates.lon,
+    });
+  });
+
+  return facts;
+}
+
+async function fetchWikipediaSummary(neighborhood, timeoutMs) {
+  const name = String(neighborhood || "").trim().replace(/\s+/g, " ");
+  if (!name) return null;
+  // Many Toronto areas (Parkdale, The Junction, Weston...) share names with other places,
+  // so try the bare title first, then the disambiguated "<name>, Toronto" form.
+  return (
+    (await fetchWikipediaSummaryByTitle(name, timeoutMs)) ||
+    (await fetchWikipediaSummaryByTitle(`${name}, Toronto`, timeoutMs))
+  );
+}
+
+async function fetchWikipediaSummaryByTitle(name, timeoutMs) {
+  const title = encodeURIComponent(name);
+  if (!title) return null;
+  const url = `https://en.wikipedia.org/api/rest_v1/page/summary/${title}`;
+  try {
+    const response = await fetchWithTimeout(url, {
+      timeoutMs,
+      headers: { Accept: "application/json", "User-Agent": "6ixPulse/0.1 (housing research agent)" },
+    });
+    const data = await response.json();
+    // Only keep real, Toronto-relevant articles — skip disambiguation pages and off-topic hits.
+    if (data.type === "disambiguation" || !data.extract) return null;
+    const extract = cleanText(data.extract);
+    if (!/toronto|ontario/i.test(extract)) return null;
+    return {
+      title: data.title || name,
+      url: data.content_urls?.desktop?.page || `https://en.wikipedia.org/wiki/${title}`,
+      extract: extract.slice(0, 400),
+      coordinates: data.coordinates
+        ? { lat: Number(data.coordinates.lat), lon: Number(data.coordinates.lon) }
+        : null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 function sourceFromDataset(key, neighborhoods) {
@@ -639,69 +714,83 @@ function query(category, sourceType, neighborhood, text, agentId = "recommendati
   };
 }
 
-function siteAny(domains) {
-  return `(${domains.map((domain) => `site:${domain}`).join(" OR ")})`;
-}
-
 function queriesForAgent(agentId, neighborhood, context) {
-  const base = `"${neighborhood}" Toronto`;
+  // Natural-language queries: keyless MCP engines ignore site: operators and lose relevance,
+  // so the domain lists are passed only as a soft ranking preference (see filterResultsForQuery),
+  // never baked into the query string. Always anchor on the full neighbourhood + "Toronto".
+  const area = `${neighborhood} Toronto`;
   const promptContext = context.context ? ` ${context.context}` : "";
   const budget = context.budget.toLocaleString();
   const destination = context.destination || "Union Station";
-  const listingSites = siteAny(["realtor.ca", "rentals.ca", "condos.ca", "zillow.com", "apartments.com"]);
-  const marketSites = siteAny(["rentals.ca", "zolo.ca", "housesigma.com", "strata.ca", "wowa.ca"]);
-  const redditSites = siteAny(["reddit.com/r/askTO", "reddit.com/r/TorontoRenting", "reddit.com/r/toronto"]);
-  const transitSites = siteAny(["ttc.ca", "toronto.ca", "metrolinx.com", "gotransit.com"]);
-  const safetySites = siteAny(["toronto.ca", "torontopolice.on.ca", "data.torontopolice.on.ca"]);
-  const lifestyleSites = siteAny(["yelp.ca", "blogto.com", "google.com/maps", "tripadvisor.ca"]);
-  const growthSites = siteAny(["urbantoronto.ca", "storeys.com", "renx.ca", "toronto.ca"]);
-  const guideSites = siteAny(["reddit.com/r/askTO", "torontolife.com", "blogto.com", "liv.rent"]);
+  const reddit = ["reddit.com/r/askTO", "reddit.com/r/TorontoRenting", "reddit.com/r/toronto"];
 
   if (agentId === "affordability") {
     return [
-      query("listings", "market_listing", neighborhood, `${listingSites} ${base} rent apartment ${budget}${promptContext}`, "affordability", ["realtor.ca", "rentals.ca", "condos.ca", "zillow.com", "apartments.com"]),
-      query("market", "market_context", neighborhood, `${marketSites} ${base} average rent 1 bedroom rental market ${budget}${promptContext}`, "affordability", ["rentals.ca", "zolo.ca", "housesigma.com", "strata.ca", "wowa.ca"]),
+      query("listings", "market_listing", neighborhood, `${area} 1 bedroom apartment for rent under $${budget}${promptContext}`, "affordability", ["rentals.ca", "realtor.ca", "condos.ca", "zumper.com", "apartments.com"]),
+      query("market", "market_context", neighborhood, `${area} average rent price one bedroom 2025 rental market report`, "affordability", ["rentals.ca", "zolo.ca", "housesigma.com", "wowa.ca"]),
     ];
   }
 
   if (agentId === "commute") {
     return [
-      query("official", "official_context", neighborhood, `${transitSites} ${base} TTC commute to "${destination}" ${context.cap} minutes`, "commute", ["ttc.ca", "toronto.ca", "metrolinx.com", "gotransit.com"]),
-      query("community", "resident_discussion", neighborhood, `${redditSites} ${base} commute "${destination}" transit`, "commute", ["reddit.com/r/askTO", "reddit.com/r/TorontoRenting", "reddit.com/r/toronto"]),
+      query("official", "official_context", neighborhood, `${area} commute to ${destination} how long transit TTC minutes`, "commute", ["ttc.ca", "toronto.ca", "metrolinx.com", "gotransit.com"]),
+      query("community", "resident_discussion", neighborhood, `${area} commute to ${destination} reddit how long does it take`, "commute", reddit),
     ];
   }
 
   if (agentId === "safety") {
     return [
-      query("official", "official_context", neighborhood, `${safetySites} ${base} neighbourhood crime safety Toronto Police`, "safety", ["toronto.ca", "torontopolice.on.ca", "data.torontopolice.on.ca"]),
-      query("community", "resident_discussion", neighborhood, `${redditSites} ${base} safe to live crime`, "safety", ["reddit.com/r/askTO", "reddit.com/r/TorontoRenting", "reddit.com/r/toronto"]),
+      query("official", "official_context", neighborhood, `${area} neighbourhood crime rate is it safe to live`, "safety", ["toronto.ca", "torontopolice.on.ca", "data.torontopolice.on.ca"]),
+      query("community", "resident_discussion", neighborhood, `${area} is it a safe area reddit safety`, "safety", reddit),
     ];
   }
 
   if (agentId === "lifestyle") {
     return [
-      query("reviews", "local_reviews", neighborhood, `${lifestyleSites} ${base} cafes groceries parks restaurants reviews${promptContext}`, "lifestyle", ["yelp.ca", "blogto.com", "google.com/maps", "tripadvisor.ca"]),
-      query("community", "resident_discussion", neighborhood, `${redditSites} ${base} what is it like to live cafes parks`, "lifestyle", ["reddit.com/r/askTO", "reddit.com/r/TorontoRenting", "reddit.com/r/toronto"]),
+      query("reviews", "local_reviews", neighborhood, `${area} best cafes restaurants parks walkability${promptContext}`, "lifestyle", ["blogto.com", "yelp.ca", "tripadvisor.ca", "torontolife.com"]),
+      query("community", "resident_discussion", neighborhood, `${area} what is it like to live reddit cafes parks vibe`, "lifestyle", reddit),
     ];
   }
 
   if (agentId === "growth") {
     return [
-      query("market", "market_context", neighborhood, `${growthSites} ${base} development permits rent growth market trend`, "growth", ["urbantoronto.ca", "storeys.com", "renx.ca", "toronto.ca"]),
-      query("official", "official_context", neighborhood, `${siteAny(["toronto.ca", "open.toronto.ca"])} ${base} building permits development planning`, "growth", ["toronto.ca", "open.toronto.ca"]),
+      query("market", "market_context", neighborhood, `${area} new condo development construction property value trend`, "growth", ["urbantoronto.ca", "storeys.com", "renx.ca"]),
+      query("official", "official_context", neighborhood, `${area} building permits development planning growth`, "growth", ["toronto.ca", "open.toronto.ca"]),
     ];
   }
 
   return [
-    query("community", "resident_discussion", neighborhood, `${redditSites} ${base} pros cons moving there rent commute safety`, "recommendation", ["reddit.com/r/askTO", "reddit.com/r/TorontoRenting", "reddit.com/r/toronto"]),
-    query("market", "market_context", neighborhood, `${guideSites} ${base} neighbourhood guide rent commute safety amenities`, "recommendation", ["torontolife.com", "blogto.com", "liv.rent"]),
+    query("community", "resident_discussion", neighborhood, `${area} pros and cons of living there rent commute safety`, "recommendation", reddit),
+    query("market", "market_context", neighborhood, `${area} neighbourhood guide what to know before renting`, "recommendation", ["torontolife.com", "blogto.com", "liv.rent"]),
   ];
 }
 
 function filterResultsForQuery(results, query) {
+  // Every query is about a Toronto neighbourhood, so gate on relevance first: keyless
+  // engines happily return "East - Wikipedia" / "EAST | Merriam-Webster" for "East York".
+  // Dropping irrelevant hits entirely is better than feeding junk to the model — the
+  // evidence policy already shows an honest "needs source" when a category has nothing.
+  const relevant = results.filter((item) => mentionsTorontoArea(item, query.neighborhood));
+  if (!relevant.length) return [];
+
   const allowed = Array.isArray(query.domains) ? query.domains : [];
-  if (!allowed.length) return results;
-  return results.filter((item) => urlMatchesAllowedDomain(item.url, allowed));
+  if (!allowed.length) return relevant;
+  // The allowlist is a quality *preference*, not a hard gate (keyless engines ignore site:
+  // operators). Surface preferred domains first, then backfill with the rest.
+  const preferred = relevant.filter((item) => urlMatchesAllowedDomain(item.url, allowed));
+  if (!preferred.length) return relevant;
+  const rest = relevant.filter((item) => !urlMatchesAllowedDomain(item.url, allowed));
+  return [...preferred, ...rest];
+}
+
+function mentionsTorontoArea(item, neighborhood) {
+  const hay = `${item.title || ""} ${item.snippet || ""} ${item.url || ""}`.toLowerCase();
+  // Must be anchored to Toronto, or mention the *full* neighbourhood phrase. A single
+  // short token like "east" (from "East York") is too loose and lets "East - Wikipedia"
+  // and "Eastlink" through, which is exactly the junk we are trying to drop.
+  if (hay.includes("toronto") || hay.includes("ontario") || hay.includes(" gta")) return true;
+  const phrase = String(neighborhood || "").toLowerCase().trim();
+  return phrase.length > 4 && hay.includes(phrase);
 }
 
 function urlMatchesAllowedDomain(url, allowed) {

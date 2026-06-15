@@ -356,14 +356,5 @@ Before final Build Small submission:
 2. Wait for the Docker Space build to finish and confirm the live map loads.
 3. Record and link a demo video.
 4. Publish and link a social post.
-5. Verify the final Space is running `nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16`.
+5. Add `NVIDIA_API_KEY` (nvapi-…) to run Nemotron (`nvidia/nemotron-3-nano-omni-30b-a3b-reasoning`), or run a small GGUF locally via `npm run llama:serve` (llama.cpp / OpenBMB).
 6. Keep the GitHub repo or Space history connected with Codex-attributed commits for the Codex prize.
-
-## Original Prototype
-
-The original generated prototype is preserved for reference:
-
-- `6ixPulse.dc.html` - original single-file Design Component prototype
-- `support.js` - generated Design Component runtime
-- `assets/map-toronto.png` - legacy static map image, no longer used by the React app
-- `uploads/ChatGPT Image Jun 14, 2026, 12_20_59 PM.png` - original uploaded image asset
