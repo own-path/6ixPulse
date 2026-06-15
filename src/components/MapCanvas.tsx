@@ -6,8 +6,21 @@ import mapboxgl from "mapbox-gl";
 import { type LayerKey } from "../data/neighborhoods";
 import { type RankedNeighborhood } from "../lib/scoring";
 
-const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
+declare global {
+  interface Window {
+    __SIXPULSE_CONFIG__?: {
+      mapboxToken?: string;
+      mapboxStyleUrl?: string;
+      spaceRuntime?: boolean;
+    };
+  }
+}
+
+const runtimeConfig = typeof window !== "undefined" ? window.__SIXPULSE_CONFIG__ : undefined;
+const mapboxToken =
+  runtimeConfig?.mapboxToken || (import.meta.env.VITE_MAPBOX_TOKEN as string | undefined);
 const mapboxStyleUrl =
+  runtimeConfig?.mapboxStyleUrl ||
   (import.meta.env.VITE_MAPBOX_STYLE_URL as string | undefined) ||
   "mapbox://styles/ownpath/cmqe4wg8h005001s4bjx9461m";
 const hasMapboxToken = Boolean(mapboxToken?.trim());

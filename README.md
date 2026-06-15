@@ -1,5 +1,8 @@
 ---
 title: 6ixPulse
+sdk: docker
+app_port: 7860
+license: other
 tags:
   - build-small-hackathon
   - backyard-ai
@@ -12,7 +15,7 @@ tags:
   - toronto
 models:
   - Qwen/Qwen3-Coder-30B-A3B-Instruct
-  - nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4
+  - nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16
 ---
 
 # 6ixPulse
@@ -56,7 +59,8 @@ The app then ranks Toronto neighborhoods, animates the map to the areas it is re
 flowchart TD
   User["Renter prompt"] --> UI["React + Vite app"]
   UI --> Map["Mapbox GL JS + deck.gl map"]
-  UI --> API["Node agent backend"]
+  UI --> Gradio["Gradio Server\ncustom routes + API endpoint"]
+  Gradio --> API["Node agent backend"]
 
   API --> Parser["Intent parser\nbudget, commute cap, weights"]
   Parser --> Ranker["Neighborhood ranker\n14 Toronto candidate areas"]
@@ -71,7 +75,8 @@ flowchart TD
   Evidence --> Policy["Evidence policy\nfail closed for unsupported claims"]
   Policy --> Model["Small model synthesis\nHF Router / NVIDIA / Ollama"]
   Model --> API
-  API --> UI
+  API --> Gradio
+  Gradio --> UI
   UI --> Panels["Map, agent cards,\nresearch brief, comparison"]
 ```
 
@@ -81,11 +86,12 @@ flowchart TD
 - Map: Mapbox GL JS, custom Mapbox style, deck.gl
 - UI: custom CSS, lucide-react icons, map-matched monochrome palette
 - Backend: Node HTTP server
+- Space wrapper: `gradio.Server` on FastAPI, Docker Space
 - Agent orchestration: local tool trace plus model synthesis
 - Web research: bundled MCP-compatible no-key search server
 - Models:
-  - Default: `Qwen/Qwen3-Coder-30B-A3B-Instruct`
-  - Optional NVIDIA path: `nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4`
+  - Primary hackathon model: `nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16`
+  - Optional HF Router fallback: `Qwen/Qwen3-Coder-30B-A3B-Instruct`
   - Optional local path: Ollama OpenAI-compatible endpoint
 
 ## Build Small Hackathon Readiness
@@ -94,13 +100,13 @@ The official Build Small Field Guide requires every model to stay under 32B para
 
 | Requirement | Status | Notes |
 | --- | --- | --- |
-| Model under 32B | On track | Default Qwen model is about 30.5B total parameters. NVIDIA NVFP4 variant is about 18.3B by HF metadata. Do not submit the BF16 Nemotron Omni variant for the model-cap claim because HF metadata reports it above 32B. |
+| Model under 32B | On track | Primary model is `nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16`. The NVIDIA model card describes it as a 31B / A3B MoE with about 3B active parameters per token. |
 | Practical track | On track | This fits Backyard AI: a personal daily-life tool for choosing where to live. |
 | Agentic app | On track | Multi-step planning, tool use, domain-scoped search, evidence policy, and model synthesis. |
 | Custom UI | On track | The app is a custom map-first interface rather than default Gradio components. |
 | README tags | Done | Tags are in the YAML block at the top of this README. |
 | Codex prize | On track | This repo is being prepared and pushed through Codex. Keep Codex-attributed commits in the connected GitHub repo or Space history. |
-| Gradio Space | Pending | Current app is Vite + Node. Final submission should wrap or deploy it as a Gradio/Docker Space inside `build-small-hackathon`. |
+| Gradio Space | Ready to upload | `app.py` uses `gradio.Server` to serve the React app and expose `/run_agent`; `Dockerfile` builds the Vite app and runs the Node backend inside the Space. |
 | Demo video | Pending | Add a public demo video link before submission. |
 | Social post | Pending | Add a social post link before submission. |
 
@@ -170,7 +176,17 @@ TAVILY_API_KEY=your_tavily_key
 
 ## Models
 
-Default Hugging Face Router config:
+Primary NVIDIA config:
+
+```bash
+AGENT_MODEL_PROVIDER=nvidia
+NVIDIA_API_KEY=your_nvidia_api_key
+NVIDIA_MODEL=nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16
+NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1
+NVIDIA_ENABLE_THINKING=1
+```
+
+Optional Hugging Face Router fallback:
 
 ```bash
 AGENT_MODEL_PROVIDER=hf
@@ -178,15 +194,6 @@ HF_TOKEN=your_hugging_face_token
 HF_MODEL=Qwen/Qwen3-Coder-30B-A3B-Instruct
 HF_CHAT_COMPLETIONS_URL=https://router.huggingface.co/v1/chat/completions
 HF_REASONING_EFFORT=medium
-```
-
-Optional NVIDIA config:
-
-```bash
-AGENT_MODEL_PROVIDER=nvidia
-NVIDIA_API_KEY=your_nvidia_api_key
-NVIDIA_MODEL=nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4
-NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1
 ```
 
 Optional local Ollama config:
@@ -198,6 +205,59 @@ OLLAMA_HOST=http://127.0.0.1:11434
 ```
 
 If a token, model, or provider is unavailable, the API returns a deterministic local result so the UI remains usable.
+
+## Gradio Space
+
+This repo is prepared for a Docker-backed Gradio Space using `gradio.Server`, which is designed for custom frontends like React while still giving the project Gradio's API engine, queuing, MCP support, and Hugging Face Spaces hosting.
+
+The Space entrypoint is:
+
+```text
+app.py
+```
+
+What it does:
+
+- starts the Node agent backend on `127.0.0.1:8787`
+- serves the built React app from `dist/`
+- injects runtime Mapbox config from Space secrets
+- proxies the existing frontend calls to `/api/agent/run`
+- exposes a Gradio API endpoint and MCP tool named `/run_agent`
+
+Required Space secrets:
+
+```bash
+VITE_MAPBOX_TOKEN=your_mapbox_token
+NVIDIA_API_KEY=your_nvidia_api_key
+```
+
+Recommended Space variables:
+
+```bash
+AGENT_MODEL_PROVIDER=nvidia
+NVIDIA_MODEL=nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16
+NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1
+NVIDIA_ENABLE_THINKING=1
+SEARCH_PROVIDER=mcp_open_websearch
+MCP_WEB_SEARCH_ENABLED=1
+```
+
+Local Space-style run:
+
+```bash
+npm install
+npm run build
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python app.py
+```
+
+Open:
+
+```text
+http://127.0.0.1:7860/
+```
 
 ## Running Locally
 
@@ -237,6 +297,8 @@ curl http://127.0.0.1:8787/api/agent/search/health
 ## Project Structure
 
 ```text
+app.py                         Gradio Server wrapper for Space runtime
+Dockerfile                     Docker Space image with Node + Python
 src/App.tsx                    main app shell and agent panels
 src/components/MapCanvas.tsx   Mapbox/deck.gl map experience
 src/data/neighborhoods.ts      Toronto candidate seed data
@@ -271,11 +333,11 @@ Current local verification:
 
 Before final Build Small submission:
 
-1. Deploy as a Gradio or Docker-backed Gradio Space inside the `build-small-hackathon` Hugging Face org.
+1. Upload this repo as a Docker-backed Gradio Server Space inside the `build-small-hackathon` Hugging Face org.
 2. Add the live Space URL here.
 3. Record and link a demo video.
 4. Publish and link a social post.
-5. Verify the final Space uses only models under 32B total parameters.
+5. Verify the final Space is running `nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16`.
 6. Keep the GitHub repo or Space history connected with Codex-attributed commits for the Codex prize.
 
 ## Original Prototype

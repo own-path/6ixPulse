@@ -1,7 +1,7 @@
 import { buildModelContext } from "./agent-core.mjs";
 import { SYSTEM_PROMPT, parseModelJson } from "./model-prompt.mjs";
 
-const DEFAULT_MODEL = "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4";
+const DEFAULT_MODEL = "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16";
 const DEFAULT_BASE_URL = "https://integrate.api.nvidia.com/v1";
 
 export async function runNvidiaAgent(localRun, env = process.env) {
