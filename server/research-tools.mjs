@@ -152,10 +152,26 @@ export async function runHousingResearch(localRun, env = process.env) {
   const queryReports = [];
   const seenUrls = new Set(sources.map((source) => source.url));
   const maxSources = positiveInt(env.RESEARCH_MAX_SOURCES, 18);
+  const searchStartedAt = Date.now();
+  const totalTimeoutMs = positiveInt(env.RESEARCH_TOTAL_TIMEOUT_MS, 45000);
+  let timeBudgetExhausted = false;
 
   for (const query of queries) {
+    const elapsedMs = Date.now() - searchStartedAt;
+    if (elapsedMs >= totalTimeoutMs) {
+      timeBudgetExhausted = true;
+      queryReports.push({
+        ...query,
+        resultCount: 0,
+        rawResultCount: 0,
+        error: `Research time budget exhausted after ${totalTimeoutMs}ms`,
+      });
+      break;
+    }
+
     const result = await searchWeb(query.query, provider, env, {
       count: positiveInt(env.RESEARCH_RESULTS_PER_QUERY, 4),
+      timeoutMs: Math.max(1000, totalTimeoutMs - elapsedMs),
     });
     const filteredResults = filterResultsForQuery(result.results, query);
     queryReports.push({
@@ -188,6 +204,13 @@ export async function runHousingResearch(localRun, env = process.env) {
     if (sources.length >= maxSources) break;
   }
 
+  const limitations = [...official.limitations, ...researchLimitations(provider)];
+  if (timeBudgetExhausted) {
+    limitations.unshift(
+      `Web research stopped after ${totalTimeoutMs}ms to keep the agent response interactive.`,
+    );
+  }
+
   return {
     enabled: true,
     provider,
@@ -196,7 +219,7 @@ export async function runHousingResearch(localRun, env = process.env) {
     queries: queryReports,
     sources,
     facts: official.facts,
-    limitations: [...official.limitations, ...researchLimitations(provider)],
+    limitations,
   };
 }
 
@@ -585,7 +608,8 @@ async function searchMcpOpenWebSearch(queryText, env, options) {
 }
 
 async function callMcpWebSearchTool(queryText, env, options) {
-  const timeoutMs = positiveInt(env.MCP_WEB_SEARCH_TIMEOUT_MS, 14000);
+  const configuredTimeoutMs = positiveInt(env.MCP_WEB_SEARCH_TIMEOUT_MS, 14000);
+  const timeoutMs = Math.min(configuredTimeoutMs, positiveInt(options.timeoutMs, configuredTimeoutMs));
   const command = env.MCP_WEB_SEARCH_COMMAND || process.execPath;
   const args = mcpWebSearchArgs(env);
   const toolPreference = env.MCP_WEB_SEARCH_TOOL || "web_search";

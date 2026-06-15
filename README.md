@@ -151,8 +151,12 @@ The default search provider is:
 ```bash
 SEARCH_PROVIDER=mcp_open_websearch
 MCP_WEB_SEARCH_ENABLED=1
-MCP_WEB_SEARCH_TIMEOUT_MS=14000
+MCP_WEB_SEARCH_TIMEOUT_MS=6000
 MCP_WEB_SEARCH_TOOL=web_search
+RESEARCH_DEPTH=standard
+RESEARCH_MAX_QUERIES=6
+RESEARCH_RESULTS_PER_QUERY=3
+RESEARCH_TOTAL_TIMEOUT_MS=45000
 ```
 
 The bundled sidecar lives at:
@@ -162,6 +166,8 @@ server/open-websearch-mcp.mjs
 ```
 
 It exposes a `web_search` MCP tool and searches public DuckDuckGo HTML plus Bing RSS without an API key. Public search can still be rate-limited or incomplete, so the backend applies domain filtering and keeps limitations in the research payload.
+
+The hosted Space uses bounded search defaults so public no-key search does not block the agent response. For slower, deeper research runs, increase `RESEARCH_MAX_QUERIES`, `RESEARCH_TOTAL_TIMEOUT_MS`, and `MCP_WEB_SEARCH_TIMEOUT_MS`, or switch to an API-backed provider.
 
 Optional API providers remain supported:
 
@@ -248,6 +254,11 @@ NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1
 NVIDIA_ENABLE_THINKING=1
 SEARCH_PROVIDER=mcp_open_websearch
 MCP_WEB_SEARCH_ENABLED=1
+MCP_WEB_SEARCH_TIMEOUT_MS=6000
+RESEARCH_DEPTH=standard
+RESEARCH_MAX_QUERIES=6
+RESEARCH_RESULTS_PER_QUERY=3
+RESEARCH_TOTAL_TIMEOUT_MS=45000
 ```
 
 Local Space-style run:

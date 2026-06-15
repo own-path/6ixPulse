@@ -42,7 +42,13 @@ def start_node_backend() -> None:
     env.setdefault("NVIDIA_MODEL", "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16")
     env.setdefault("SEARCH_PROVIDER", "mcp_open_websearch")
     env.setdefault("MCP_WEB_SEARCH_ENABLED", "1")
+    env.setdefault("MCP_WEB_SEARCH_TIMEOUT_MS", "6000")
     env.setdefault("RESEARCH_ENABLED", "1")
+    env.setdefault("RESEARCH_DEPTH", "standard")
+    env.setdefault("RESEARCH_MAX_QUERIES", "6")
+    env.setdefault("RESEARCH_RESULTS_PER_QUERY", "3")
+    env.setdefault("RESEARCH_MAX_SOURCES", "24")
+    env.setdefault("RESEARCH_TOTAL_TIMEOUT_MS", "45000")
     env.setdefault("OFFICIAL_DATA_ENABLED", "1")
 
     node_process = subprocess.Popen(
