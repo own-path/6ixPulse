@@ -81,8 +81,9 @@ const layerLabels: Record<LayerKey, string> = {
 };
 
 const RESEARCH_TOUR_LIMIT = 5;
-const RESEARCH_TOUR_OVERVIEW_MS = 960;
-const RESEARCH_TOUR_VISIT_MS = 1680;
+const RESEARCH_TOUR_OVERVIEW_MS = 0;
+// Must match TOUR_DWELL_MS in MapCanvas: the camera dwells on each area while it is researched.
+const RESEARCH_TOUR_VISIT_MS = 4600;
 const RESEARCH_TOUR_SETTLE_MS = 520;
 
 export default function App() {
@@ -795,7 +796,11 @@ function DetailPanel({
         </p>
 
         <div className="detail-actions">
-          <button type="button" className="primary-action">
+          <button
+            type="button"
+            className="primary-action"
+            onClick={() => openListings(selected.name, parsed.budget)}
+          >
             View Listings
           </button>
           <button type="button" className="secondary-action" onClick={onToggleSaved}>
@@ -1101,6 +1106,18 @@ function formatFactValue(fact: ResearchFact) {
 
 function factSource(fact: ResearchFact) {
   return fact.sourceName || fact.sourceId;
+}
+
+// Opens current rental listings for the area + budget in a new tab. Real listing sites
+// (rentals.ca, realtor.ca, etc.) block server scraping, but load fine in a real browser —
+// so this hands the search to the user instead of the agent scraping blocked pages.
+function openListings(name: string, budget: number) {
+  const query = `${name} Toronto apartments for rent${budget ? ` under $${budget.toLocaleString()}` : ""}`;
+  window.open(
+    `https://www.google.com/search?q=${encodeURIComponent(query)}`,
+    "_blank",
+    "noopener,noreferrer",
+  );
 }
 
 function TowerLogo() {

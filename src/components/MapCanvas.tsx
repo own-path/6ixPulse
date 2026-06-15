@@ -49,6 +49,9 @@ const basemapConfig = {
   colorTransitLabels: "#465f83",
 };
 
+// How long the camera stays parked on each neighbourhood while it is being researched.
+const TOUR_DWELL_MS = 4600;
+
 type SignalLayerState = Partial<Record<LayerKey, boolean>>;
 type ResearchTour = {
   runId: number;
@@ -277,15 +280,11 @@ export default function MapCanvas({
     map.stop();
     onTourStepRef.current(null);
 
-    map.easeTo({
-      center: [-79.3832, 43.6532],
-      zoom: 11.35,
-      pitch: pitched ? 52 : 0,
-      bearing: pitched ? -18 : 0,
-      duration: 960,
-      easing: easeInOutCubic,
-      essential: true,
-    });
+    // Stay parked on each neighbourhood while the agent researches it — no zoom-out to the
+    // city between stops. A long dwell + a slow "studying" drift reads as deliberate research
+    // instead of a quick flyby. The camera rests on the last area until the run resolves.
+    const DWELL_MS = TOUR_DWELL_MS;
+    const FLY_MS = 1500;
 
     stops.forEach((neighborhood, index) => {
       scheduleTour(() => {
@@ -296,20 +295,34 @@ export default function MapCanvas({
 
         mapRef.current.easeTo({
           center: neighborhood.center,
-          zoom: 13.95 + Math.min(index, 2) * 0.08,
+          zoom: 14.1,
           pitch: pitched ? 66 : 0,
-          bearing: pitched ? -24 + (index % 2 === 0 ? 3 : -3) : 0,
-          duration: 1360,
+          bearing: pitched ? -22 : 0,
+          duration: index === 0 ? 1100 : FLY_MS,
           easing: easeInOutCubic,
           essential: true,
         });
-      }, 960 + index * 1680);
+
+        // Gentle settle drift so it doesn't look frozen while "finding everything".
+        scheduleTour(() => {
+          if (!researchTour || researchTour.runId !== runId || !mapRef.current) return;
+          if (lastSelectedIdRef.current !== neighborhood.id) return;
+          mapRef.current.easeTo({
+            center: neighborhood.center,
+            zoom: 14.35,
+            bearing: pitched ? -28 : 0,
+            duration: DWELL_MS - FLY_MS - 200,
+            easing: (t: number) => t,
+            essential: true,
+          });
+        }, FLY_MS + 120);
+      }, index * DWELL_MS);
     });
 
     scheduleTour(() => {
       if (!researchTour || researchTour.runId !== runId) return;
       tourActiveRef.current = false;
-    }, 960 + stops.length * 1680 + 160);
+    }, stops.length * DWELL_MS + 160);
 
     return () => {
       tourActiveRef.current = false;
