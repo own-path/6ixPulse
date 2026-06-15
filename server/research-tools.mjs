@@ -114,34 +114,6 @@ const TORONTO_DATASETS = {
   },
 };
 
-const SOURCE_CATEGORIES = [
-  {
-    category: "listings",
-    sourceType: "market_listing",
-    domains: ["realtor.ca", "zillow.com", "rentals.ca", "condos.ca", "zumper.com", "padmapper.com"],
-  },
-  {
-    category: "community",
-    sourceType: "resident_discussion",
-    domains: ["reddit.com/r/askTO", "reddit.com/r/TorontoRenting", "reddit.com/r/toronto"],
-  },
-  {
-    category: "reviews",
-    sourceType: "local_reviews",
-    domains: ["google.com/maps", "yelp.ca", "tripadvisor.ca"],
-  },
-  {
-    category: "official",
-    sourceType: "official_context",
-    domains: ["toronto.ca", "ttc.ca", "torontopolice.on.ca", "metrolinx.com"],
-  },
-  {
-    category: "market",
-    sourceType: "market_context",
-    domains: ["zolo.ca", "housesigma.com", "strata.ca", "rentals.ca/blog", "wowa.ca"],
-  },
-];
-
 const officialDataCache = new Map();
 
 export async function runHousingResearch(localRun, env = process.env) {

@@ -47,11 +47,6 @@ export interface Neighborhood {
   tradeoff: string;
 }
 
-export interface NeighborhoodFeatureProperties {
-  id: string;
-  name: string;
-}
-
 export const DIMENSIONS: DimensionKey[] = [
   "affordability",
   "safety",
@@ -442,48 +437,3 @@ export const neighborhoods: Neighborhood[] = [
     tradeoff: "Well over the rent cap; you pay for the convenience.",
   },
 ];
-
-export const unionStation: LngLat = [-79.3806, 43.6452];
-
-function mockBoundary(
-  [lng, lat]: LngLat,
-  radiusLng: number,
-  radiusLat: number,
-  seed: number,
-): LngLat[] {
-  const points: LngLat[] = [];
-  for (let i = 0; i < 18; i += 1) {
-    const angle = (Math.PI * 2 * i) / 18;
-    const wobble = 1 + Math.sin(seed * 1.7 + i * 0.9) * 0.14;
-    points.push([
-      Number((lng + Math.cos(angle) * radiusLng * wobble).toFixed(6)),
-      Number((lat + Math.sin(angle) * radiusLat * wobble).toFixed(6)),
-    ]);
-  }
-  points.push(points[0]);
-  return points;
-}
-
-export function buildNeighborhoodGeoJson(rows = neighborhoods) {
-  return {
-    type: "FeatureCollection",
-    features: rows.map((neighborhood) => ({
-      type: "Feature",
-      properties: {
-        id: neighborhood.id,
-        name: neighborhood.name,
-      } satisfies NeighborhoodFeatureProperties,
-      geometry: {
-        type: "Polygon",
-        coordinates: [
-          mockBoundary(
-            neighborhood.center,
-            neighborhood.radiusLng,
-            neighborhood.radiusLat,
-            neighborhood.seed,
-          ),
-        ],
-      },
-    })),
-  };
-}

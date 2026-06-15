@@ -33,7 +33,6 @@ import {
   colorForScore,
   consensus,
   defaultPrompt,
-  formatRentRange,
   getAgentFinding,
   getAgentThinking,
   initialAgentStates,
@@ -1112,13 +1111,6 @@ function CompareModal({
   );
 }
 
-function ScoreBadge({ score }: { score: number }) {
-  return (
-    <span className="score-badge" style={{ background: colorForScore(score || 1) }}>
-      {score}
-    </span>
-  );
-}
 
 function TrustBadge({ sourced }: { sourced: boolean }) {
   return <span className={`trust-badge ${sourced ? "sourced" : "pending"}`}>{sourced ? "Sourced" : "Needs source"}</span>;
@@ -1260,80 +1252,6 @@ function TowerLogo() {
   );
 }
 
-function Sparkline({ selected }: { selected: RankedNeighborhood }) {
-  const { path, area } = useMemo(() => {
-    const count = 26;
-    const width = 240;
-    const height = 56;
-    const pad = 5;
-    const values = Array.from({ length: count }, (_, index) => {
-      return (
-        10 +
-        (selected.trend / 12) * index * 1.15 +
-        Math.sin(index * 1.3 + selected.name.length) * 3 +
-        Math.cos(index * 0.7 + selected.seed) * 2
-      );
-    });
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const x = (index: number) => (index / (count - 1)) * (width - pad * 2) + pad;
-    const y = (value: number) =>
-      height - pad - ((value - min) / ((max - min) || 1)) * (height - pad * 2);
-    const line = values
-      .map((value, index) => `${index ? "L" : "M"}${x(index).toFixed(1)} ${y(value).toFixed(1)}`)
-      .join(" ");
-    return {
-      path: line,
-      area: `${line} L ${x(count - 1).toFixed(1)} ${height} L ${x(0).toFixed(1)} ${height} Z`,
-    };
-  }, [selected]);
-
-  return (
-    <svg viewBox="0 0 240 56" preserveAspectRatio="none" aria-hidden="true">
-      <path d={area} fill="rgba(95, 127, 170, 0.16)" />
-      <path d={path} fill="none" stroke="#46648d" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function buildWhy(neighborhood: RankedNeighborhood) {
-  const rows: Array<{ tone: "good" | "warn"; text: string }> = [];
-  const candidates: Array<[DimensionKey, string]> = [
-    ["commute", `${neighborhood.comLo}-${neighborhood.comHi} min to Union via ${neighborhood.comMode}`],
-    ["affordability", "Lower rent pressure than the downtown core"],
-    ["amenities", "Strong grocery, cafe and service access"],
-    ["lifestyle", neighborhood.lifeHi],
-    ["transit", "Strong transit access"],
-    ["safety", "Relatively strong safety signals"],
-    ["growth", neighborhood.growthNote],
-  ];
-
-  candidates.forEach(([dimension, text]) => {
-    if (rows.length < 4 && neighborhood.dims[dimension] >= 75) rows.push({ tone: "good", text });
-  });
-
-  if (rows.length < 3) {
-    candidates.forEach(([, text]) => {
-      if (rows.length < 4 && !rows.some((row) => row.text === text)) rows.push({ tone: "good", text });
-    });
-  }
-
-  const weakest = candidates.reduce((low, current) =>
-    neighborhood.dims[current[0]] < neighborhood.dims[low[0]] ? current : low,
-  );
-  const warnings: Record<DimensionKey, string> = {
-    affordability: "Pricey at the very top end",
-    safety: "Mixed safety signals, verify locally",
-    commute: "Longer commute on some routes",
-    transit: "Transit can need a transfer",
-    amenities: "Fewer late-night options",
-    lifestyle: "Quieter after dark",
-    growth: "Slower projected upside",
-  };
-  rows.push({ tone: "warn", text: warnings[weakest[0]] });
-  return rows;
-}
-
 function priorityChips(parsed: ParsedPrompt) {
   const meta: Record<DimensionKey, [string, string]> = {
     affordability: ["Affordability", "#5f7faa"],
@@ -1408,25 +1326,6 @@ function alpha(hex: string, value: number) {
   const green = (parsed >> 8) & 255;
   const blue = parsed & 255;
   return `rgba(${red},${green},${blue},${value})`;
-}
-
-function hasNeighborhoodSource(
-  webResearch: AgentBackendRun["webResearch"] | null,
-  neighborhood: string,
-  sourceTypes: string[],
-) {
-  if (!webResearch?.enabled) return false;
-  const target = normalizeEvidenceName(neighborhood);
-  return webResearch.sources.some((source) => {
-    const sourceNeighborhood = normalizeEvidenceName(source.neighborhood);
-    const sourceTypeMatch = sourceTypes.includes(source.sourceType);
-    const neighborhoodMatch =
-      !sourceNeighborhood ||
-      sourceNeighborhood.includes(target) ||
-      target.includes(sourceNeighborhood) ||
-      source.neighborhood.includes(", ");
-    return sourceTypeMatch && neighborhoodMatch;
-  });
 }
 
 function findNeighborhoodFact(

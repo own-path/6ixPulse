@@ -1,5 +1,5 @@
 // Shared "talk to the configured agentic model" helper. Resolves whichever brain is
-// active (Nemotron / llama.cpp+OpenBMB / Ollama / HF) and sends an OpenAI-compatible chat
+// active (Nemotron / llama.cpp+OpenBMB / HF) and sends an OpenAI-compatible chat
 // request, so the per-agent fan-out reasons with the SAME agentic model as the synthesiser.
 import { stripReasoning } from "./model-prompt.mjs";
 
@@ -18,7 +18,6 @@ export function resolveActiveProvider(env = process.env) {
   const has = {
     nvidia: Boolean(env.NVIDIA_API_KEY || env.NGC_API_KEY),
     llamacpp: env.LLAMACPP_ENABLED === "1",
-    ollama: Boolean(env.OLLAMA_MODEL || env.AGENT_OLLAMA_MODEL),
     hf: Boolean(env.HF_TOKEN || env.HUGGINGFACEHUB_API_TOKEN || env.HUGGING_FACE_HUB_TOKEN),
   };
   if (raw !== "auto" && raw !== "") return has[raw] ? raw : firstAvailable(has);
@@ -28,7 +27,6 @@ export function resolveActiveProvider(env = process.env) {
 function firstAvailable(has) {
   if (has.nvidia) return "nvidia";
   if (has.llamacpp) return "llamacpp";
-  if (has.ollama) return "ollama";
   if (has.hf) return "hf";
   return null;
 }
@@ -37,7 +35,6 @@ function availability(env) {
   return {
     nvidia: Boolean(env.NVIDIA_API_KEY || env.NGC_API_KEY),
     llamacpp: env.LLAMACPP_ENABLED === "1",
-    ollama: Boolean(env.OLLAMA_MODEL || env.AGENT_OLLAMA_MODEL),
     hf: Boolean(env.HF_TOKEN || env.HUGGINGFACEHUB_API_TOKEN || env.HUGGING_FACE_HUB_TOKEN),
   };
 }
@@ -51,7 +48,6 @@ export function resolveMainProvider(env = process.env) {
   if (raw !== "auto" && raw !== "" && has[raw]) return raw;
   if (has.nvidia) return "nvidia";
   if (has.hf) return "hf";
-  if (has.ollama) return "ollama";
   if (has.llamacpp) return "llamacpp";
   return null;
 }
@@ -83,14 +79,6 @@ function endpointFor(provider, env) {
       model: env.LLAMACPP_MODEL || "local-gguf",
       auth: env.LLAMACPP_API_KEY || "",
       grammar: true,
-    };
-  }
-  if (provider === "ollama") {
-    const host = env.OLLAMA_HOST || "http://127.0.0.1:11434";
-    return {
-      url: env.OLLAMA_CHAT_COMPLETIONS_URL || `${host.replace(/\/$/, "")}/v1/chat/completions`,
-      model: env.OLLAMA_MODEL || env.AGENT_OLLAMA_MODEL,
-      auth: "ollama",
     };
   }
   return {

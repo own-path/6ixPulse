@@ -4,7 +4,6 @@ import { resolve } from "node:path";
 import { applyEvidencePolicy, buildLocalAgentRun, mergeModelRecommendation } from "./agent-core.mjs";
 import { configuredModel, runHfAgent } from "./hf-client.mjs";
 import { configuredNvidiaModel, runNvidiaAgent } from "./nvidia-client.mjs";
-import { configuredOllamaModel, runOllamaAgent } from "./ollama-client.mjs";
 import { configuredLlamaCppModel, llamaCppEnabled, runLlamaCppAgent } from "./llamacpp-client.mjs";
 import { runAgentFanOut } from "./agent-fanout.mjs";
 import { discoverNeighborhoods, buildDiscoveredRows } from "./discover.mjs";
@@ -45,7 +44,6 @@ const server = createServer(async (request, response) => {
         ),
         nvidiaConfigured: Boolean(process.env.NVIDIA_API_KEY || process.env.NGC_API_KEY),
         llamacppConfigured: llamaCppEnabled(),
-        ollamaConfigured: Boolean(configuredOllamaModel()),
         searchProvider: configuredSearchProvider(),
         search: searchProviderStatus(),
         researchEnabled: process.env.RESEARCH_ENABLED !== "0",
@@ -302,9 +300,6 @@ async function runConfiguredModel(localRun) {
   if (provider === "llamacpp") {
     return { provider, ...(await runLlamaCppAgent(localRun)) };
   }
-  if (provider === "ollama") {
-    return { provider, ...(await runOllamaAgent(localRun)) };
-  }
   if (provider === "nvidia") {
     return { provider, ...(await runNvidiaAgent(localRun)) };
   }
@@ -313,20 +308,18 @@ async function runConfiguredModel(localRun) {
   }
 
   // auto: Nemotron (NVIDIA) first when keyed, then a local llama.cpp/OpenBMB GGUF,
-  // then Ollama, then the HF model — so the agent always lands on a working brain.
+  // then the HF model — so the agent always lands on a working brain.
   const nvidia = await runNvidiaAgent(localRun);
   if (nvidia.status === "done") return { provider: "nvidia", ...nvidia };
   const llamacpp = await runLlamaCppAgent(localRun);
   if (llamacpp.status === "done") return { provider: "llamacpp", ...llamacpp };
-  const ollama = await runOllamaAgent(localRun);
-  if (ollama.status === "done") return { provider: "ollama", ...ollama };
   const hf = await runHfAgent(localRun);
   if (hf.status === "done") return { provider: "hf", ...hf };
 
   return {
     provider: "auto",
     status: "error",
-    reason: `NVIDIA: ${nvidia.reason}; llama.cpp: ${llamacpp.reason}; Ollama: ${ollama.reason}; Hugging Face: ${hf.reason}`,
+    reason: `NVIDIA: ${nvidia.reason}; llama.cpp: ${llamacpp.reason}; Hugging Face: ${hf.reason}`,
     model: configuredAgentModel(),
     result: null,
   };
@@ -334,7 +327,7 @@ async function runConfiguredModel(localRun) {
 
 function configuredProvider() {
   const raw = (process.env.AGENT_MODEL_PROVIDER || process.env.AGENT_PROVIDER || "hf").toLowerCase();
-  if (["nvidia", "llamacpp", "ollama", "hf", "auto"].includes(raw)) return raw;
+  if (["nvidia", "llamacpp", "hf", "auto"].includes(raw)) return raw;
   return "hf";
 }
 
@@ -342,9 +335,8 @@ function configuredAgentModel() {
   const provider = configuredProvider();
   if (provider === "nvidia") return configuredNvidiaModel();
   if (provider === "llamacpp") return configuredLlamaCppModel();
-  if (provider === "ollama") return configuredOllamaModel();
   if (provider === "auto") {
-    return configuredNvidiaModel() || configuredLlamaCppModel() || configuredOllamaModel() || configuredModel();
+    return configuredNvidiaModel() || configuredLlamaCppModel() || configuredModel();
   }
   return configuredModel();
 }
