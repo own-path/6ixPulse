@@ -15,6 +15,10 @@ ENV RESEARCH_RESULTS_PER_QUERY=3
 ENV RESEARCH_MAX_SOURCES=24
 ENV RESEARCH_TOTAL_TIMEOUT_MS=45000
 ENV OFFICIAL_DATA_ENABLED=1
+# Keep the full agentic workflow on the Space: the model discovers neighbourhoods
+# (nothing hardcoded) and each City Agent reasons via the configured agentic model.
+ENV AGENT_DISCOVER=1
+ENV AGENT_FANOUT=1
 
 WORKDIR /app
 
