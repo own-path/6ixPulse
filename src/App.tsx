@@ -685,9 +685,26 @@ function DetailPanel({
 }) {
   const fit = consensus(selected.overall);
   const [playing, setPlaying] = useState(false);
+  const voiceRef = useRef<SpeechSynthesisVoice | null>(null);
+  const keepAliveRef = useRef<number | null>(null);
+
+  // Pick the smoothest available voice once (browsers load them asynchronously).
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
+    const load = () => {
+      voiceRef.current = pickVoice(window.speechSynthesis.getVoices());
+    };
+    load();
+    window.speechSynthesis.addEventListener("voiceschanged", load);
+    return () => window.speechSynthesis.removeEventListener("voiceschanged", load);
+  }, []);
 
   const stopSpeech = useCallback(() => {
     if (typeof window !== "undefined" && window.speechSynthesis) window.speechSynthesis.cancel();
+    if (keepAliveRef.current) {
+      window.clearInterval(keepAliveRef.current);
+      keepAliveRef.current = null;
+    }
     setPlaying(false);
   }, []);
 
@@ -701,12 +718,28 @@ function DetailPanel({
       return;
     }
     const utterance = new SpeechSynthesisUtterance(buildSpokenSummary(selected, recommendation, webResearch));
-    utterance.rate = 1.02;
-    utterance.pitch = 1;
-    utterance.onend = () => setPlaying(false);
-    utterance.onerror = () => setPlaying(false);
+    if (voiceRef.current) {
+      utterance.voice = voiceRef.current;
+      utterance.lang = voiceRef.current.lang;
+    }
+    utterance.rate = 0.96; // a touch slower reads more naturally
+    utterance.pitch = 1.02;
+    const end = () => {
+      if (keepAliveRef.current) {
+        window.clearInterval(keepAliveRef.current);
+        keepAliveRef.current = null;
+      }
+      setPlaying(false);
+    };
+    utterance.onend = end;
+    utterance.onerror = end;
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
+    // Chrome stops long utterances after ~15s; a periodic resume keeps it flowing smoothly.
+    keepAliveRef.current = window.setInterval(() => {
+      if (window.speechSynthesis.speaking) window.speechSynthesis.resume();
+      else end();
+    }, 9000);
     setPlaying(true);
   };
   const safetyFact = findNeighborhoodFact(webResearch, selected.name, "safety");
@@ -1162,7 +1195,27 @@ function buildSpokenSummary(
   }
   const text = parts.join(" ").replace(/\s+/g, " ").trim();
   const words = text.split(" ");
-  return words.length > 60 ? `${words.slice(0, 60).join(" ").replace(/[,;:]+$/, "")}.` : text;
+  return words.length > 55 ? `${words.slice(0, 55).join(" ").replace(/[,;:]+$/, "")}.` : text;
+}
+
+// Choose the most natural-sounding English voice the browser offers. Cloud/"Natural" voices
+// (non-localService) sound far smoother than the default robotic system voice.
+function pickVoice(voices: SpeechSynthesisVoice[]) {
+  if (!voices.length) return null;
+  const english = voices.filter((voice) => /^en[-_]?/i.test(voice.lang));
+  const pool = english.length ? english : voices;
+  const score = (voice: SpeechSynthesisVoice) => {
+    let value = 0;
+    if (/natural|neural|premium|enhanced/i.test(voice.name)) value += 100;
+    if (/google/i.test(voice.name)) value += 60;
+    if (/(samantha|ava|allison|serena|zoe|jenny|aria|libby|sonia|nora|emma)/i.test(voice.name)) value += 50;
+    if (!voice.localService) value += 30;
+    if (/en[-_]US/i.test(voice.lang)) value += 12;
+    if (/en[-_](CA|GB|AU)/i.test(voice.lang)) value += 8;
+    if (/zira|david|mark|microsoft/i.test(voice.name)) value -= 15;
+    return value;
+  };
+  return [...pool].sort((a, b) => score(b) - score(a))[0] ?? null;
 }
 
 function TowerLogo() {
