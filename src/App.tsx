@@ -26,6 +26,7 @@ import {
 import MapCanvas from "./components/MapCanvas";
 import { DIMENSIONS, type DimensionKey, type LayerKey } from "./data/neighborhoods";
 import { runAgentBackend, type AgentBackendRun } from "./lib/agentApi";
+import { synthesizeKokoro } from "./lib/tts";
 import {
   agentDimension,
   cityAgents,
@@ -684,64 +685,57 @@ function DetailPanel({
   recommendation: AgentBackendRun["recommendation"] | null;
 }) {
   const fit = consensus(selected.overall);
-  const [playing, setPlaying] = useState(false);
-  const voiceRef = useRef<SpeechSynthesisVoice | null>(null);
-  const keepAliveRef = useRef<number | null>(null);
-
-  // Pick the smoothest available voice once (browsers load them asynchronously).
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.speechSynthesis) return;
-    const load = () => {
-      voiceRef.current = pickVoice(window.speechSynthesis.getVoices());
-    };
-    load();
-    window.speechSynthesis.addEventListener("voiceschanged", load);
-    return () => window.speechSynthesis.removeEventListener("voiceschanged", load);
-  }, []);
+  const [audioState, setAudioState] = useState<"idle" | "loading" | "playing">("idle");
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const reqRef = useRef(0);
 
   const stopSpeech = useCallback(() => {
-    if (typeof window !== "undefined" && window.speechSynthesis) window.speechSynthesis.cancel();
-    if (keepAliveRef.current) {
-      window.clearInterval(keepAliveRef.current);
-      keepAliveRef.current = null;
+    reqRef.current += 1; // invalidate any in-flight synthesis
+    if (audioRef.current) {
+      audioRef.current.pause();
+      if (audioRef.current.src) URL.revokeObjectURL(audioRef.current.src);
+      audioRef.current = null;
     }
-    setPlaying(false);
+    if (typeof window !== "undefined" && window.speechSynthesis) window.speechSynthesis.cancel();
+    setAudioState("idle");
   }, []);
 
   // Stop narration when the neighbourhood changes or the panel unmounts.
   useEffect(() => stopSpeech, [selected.id, stopSpeech]);
 
-  const togglePlay = () => {
-    if (typeof window === "undefined" || !window.speechSynthesis) return;
-    if (playing) {
+  const togglePlay = async () => {
+    if (audioState !== "idle") {
       stopSpeech();
       return;
     }
-    const utterance = new SpeechSynthesisUtterance(buildSpokenSummary(selected, recommendation, webResearch));
-    if (voiceRef.current) {
-      utterance.voice = voiceRef.current;
-      utterance.lang = voiceRef.current.lang;
-    }
-    utterance.rate = 0.96; // a touch slower reads more naturally
-    utterance.pitch = 1.02;
-    const end = () => {
-      if (keepAliveRef.current) {
-        window.clearInterval(keepAliveRef.current);
-        keepAliveRef.current = null;
+    const text = buildSpokenSummary(selected, recommendation, webResearch);
+    const req = (reqRef.current += 1);
+    setAudioState("loading");
+    try {
+      const url = await synthesizeKokoro(text);
+      if (reqRef.current !== req) {
+        URL.revokeObjectURL(url);
+        return;
       }
-      setPlaying(false);
-    };
-    utterance.onend = end;
-    utterance.onerror = end;
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
-    // Chrome stops long utterances after ~15s; a periodic resume keeps it flowing smoothly.
-    keepAliveRef.current = window.setInterval(() => {
-      if (window.speechSynthesis.speaking) window.speechSynthesis.resume();
-      else end();
-    }, 9000);
-    setPlaying(true);
+      const element = new Audio(url);
+      audioRef.current = element;
+      element.onended = () => {
+        URL.revokeObjectURL(url);
+        if (reqRef.current === req) setAudioState("idle");
+      };
+      await element.play();
+      if (reqRef.current === req) setAudioState("playing");
+    } catch {
+      // Kokoro unavailable (still downloading / unsupported) — fall back to the browser voice.
+      if (reqRef.current !== req) return;
+      speakWithBrowser(text, () => {
+        if (reqRef.current === req) setAudioState("idle");
+      });
+      setAudioState("playing");
+    }
   };
+
+  const playing = audioState !== "idle";
   const safetyFact = findNeighborhoodFact(webResearch, selected.name, "safety");
   const rentFact = findNeighborhoodFact(webResearch, selected.name, "rent");
   const commuteFact = findNeighborhoodFact(webResearch, selected.name, "commute");
@@ -864,8 +858,14 @@ function DetailPanel({
             onClick={togglePlay}
             aria-label={playing ? "Stop summary audio" : "Play summary audio"}
           >
-            {playing ? <Square size={14} fill="currentColor" /> : <Volume2 size={15} />}
-            {playing ? "Stop" : "Play"}
+            {audioState === "loading" ? (
+              <LoaderCircle size={14} className="spin" />
+            ) : audioState === "playing" ? (
+              <Square size={14} fill="currentColor" />
+            ) : (
+              <Volume2 size={15} />
+            )}
+            {audioState === "loading" ? "Voice…" : audioState === "playing" ? "Stop" : "Play"}
           </button>
         </div>
       </section>
@@ -1216,6 +1216,27 @@ function pickVoice(voices: SpeechSynthesisVoice[]) {
     return value;
   };
   return [...pool].sort((a, b) => score(b) - score(a))[0] ?? null;
+}
+
+// Fallback narration using the browser's built-in speech, for the brief window while Kokoro
+// downloads or on browsers where it can't run.
+function speakWithBrowser(text: string, onEnd: () => void) {
+  if (typeof window === "undefined" || !window.speechSynthesis) {
+    onEnd();
+    return;
+  }
+  const utterance = new SpeechSynthesisUtterance(text);
+  const voice = pickVoice(window.speechSynthesis.getVoices());
+  if (voice) {
+    utterance.voice = voice;
+    utterance.lang = voice.lang;
+  }
+  utterance.rate = 0.96;
+  utterance.pitch = 1.02;
+  utterance.onend = onEnd;
+  utterance.onerror = onEnd;
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(utterance);
 }
 
 function TowerLogo() {

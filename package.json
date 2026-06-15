@@ -17,6 +17,7 @@
     "@deck.gl/core": "^9.0.0",
     "@deck.gl/layers": "^9.0.0",
     "@deck.gl/mapbox": "^9.0.0",
+    "kokoro-js": "^1.2.1",
     "lucide-react": "^0.468.0",
     "mapbox-gl": "^3.11.1",
     "react": "^19.0.0",

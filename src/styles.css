@@ -260,6 +260,14 @@ textarea:focus-visible {
   50% { box-shadow: 0 0 0 5px rgba(48, 75, 120, 0); }
 }
 
+.secondary-action .spin {
+  animation: tts-spin 0.9s linear infinite;
+}
+
+@keyframes tts-spin {
+  to { transform: rotate(360deg); }
+}
+
 .map-scan-fx {
   position: absolute;
   inset: 0;
