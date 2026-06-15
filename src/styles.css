@@ -1074,7 +1074,8 @@ textarea:focus-visible {
 
 .detail-stack {
   display: flex;
-  max-height: calc(100vh - 126px);
+  /* Leave room at the bottom-right so the panel never covers the map controls. */
+  max-height: calc(100vh - 196px);
   flex-direction: column;
   gap: 12px;
   overflow-x: hidden;
@@ -1464,7 +1465,8 @@ textarea:focus-visible {
 
 .agent-rail {
   display: flex;
-  max-height: calc(100vh - 128px);
+  /* Leave room at the bottom-right so the panel never covers the map controls. */
+  max-height: calc(100vh - 196px);
   flex-direction: column;
   padding: 0;
   overflow: hidden;
