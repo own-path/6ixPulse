@@ -693,25 +693,25 @@ function DetailPanel({
     safetyFact
       ? {
           tone: "good" as const,
-          text: `${safetyFact.neighborhood}: ${safetyFact.value.toLocaleString()} ${safetyFact.unit} (${safetyFact.sourceId}).`,
+          text: `${safetyFact.neighborhood}: ${safetyFact.value.toLocaleString()} ${safetyFact.unit} (${factSource(safetyFact)}).`,
         }
       : null,
     rentFact
       ? {
           tone: "good" as const,
-          text: `${rentFact.label}: ${formatFactValue(rentFact)} (${rentFact.sourceId}).`,
+          text: `${rentFact.label}: ${formatFactValue(rentFact)} (${factSource(rentFact)}).`,
         }
       : null,
     commuteFact
       ? {
           tone: "good" as const,
-          text: `${commuteFact.label}: ${formatFactValue(commuteFact)} (${commuteFact.sourceId}).`,
+          text: `${commuteFact.label}: ${formatFactValue(commuteFact)} (${factSource(commuteFact)}).`,
         }
       : null,
     growthFact
       ? {
           tone: "good" as const,
-          text: `${growthFact.label}: ${formatFactValue(growthFact)} (${growthFact.sourceId}).`,
+          text: `${growthFact.label}: ${formatFactValue(growthFact)} (${factSource(growthFact)}).`,
         }
       : null,
   ].filter((item): item is { tone: "good"; text: string } => Boolean(item));
@@ -730,7 +730,7 @@ function DetailPanel({
               <span>{safetyFact.unit}</span>
             </div>
             <p>
-              {safetyFact.detail} Source {safetyFact.sourceId}.
+              {safetyFact.detail} Source: {factSource(safetyFact)}.
             </p>
           </>
         ) : (
@@ -837,17 +837,17 @@ function ResearchPanel({
             <span key={fact.id}>
               <strong>{fact.neighborhood}</strong>
               <b>{fact.value.toLocaleString()}</b>
-              <small>{fact.label} · {fact.sourceId}</small>
+              <small>{fact.label} · {factSource(fact)}</small>
             </span>
           ))}
         </div>
       )}
       <div className="research-source-list">
-        {sources.map((source) => (
+        {sources.map((source, index) => (
           <a key={source.id} href={source.url} target="_blank" rel="noreferrer">
-            <b>{source.id}</b>
+            <b>{index + 1}</b>
             <span>
-              <strong>{source.title}</strong>
+              <strong>{source.sourceName || source.title}</strong>
               <small>
                 {source.domain} · {source.category} · {source.reliability}
               </small>
@@ -1022,7 +1022,23 @@ function CompareModal({
                   </span>
                 );
               })}
-              <TrustBadge sourced={false} />
+              {dimensionHasEvidence(webResearch, neighborhood.name, "affordability") ? (
+                <span className="compare-bar">
+                  <i>
+                    <span
+                      style={{
+                        width: `${neighborhood.overall}%`,
+                        background: colorForScore(neighborhood.overall),
+                      }}
+                    />
+                  </i>
+                  <small>{neighborhood.overall}</small>
+                </span>
+              ) : (
+                <span className="compare-bar">
+                  <small className="source-needed">Needed</small>
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -1081,6 +1097,10 @@ function formatFactValue(fact: ResearchFact) {
   const rawValue =
     typeof fact.value === "number" ? fact.value.toLocaleString() : String(fact.value || "");
   return fact.unit ? `${rawValue} ${fact.unit}` : rawValue;
+}
+
+function factSource(fact: ResearchFact) {
+  return fact.sourceName || fact.sourceId;
 }
 
 function TowerLogo() {

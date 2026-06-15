@@ -8,8 +8,10 @@ import { configuredOllamaModel, runOllamaAgent } from "./ollama-client.mjs";
 import { configuredLlamaCppModel, llamaCppEnabled, runLlamaCppAgent } from "./llamacpp-client.mjs";
 import { runAgentFanOut } from "./agent-fanout.mjs";
 import { discoverNeighborhoods, buildDiscoveredRows } from "./discover.mjs";
+import { computeNeighborhoodScores, scoreFactsAndSources } from "./score-tools.mjs";
 import {
   configuredSearchProvider,
+  crimeRatesByName,
   runGoogleSearchProbe,
   runHousingResearch,
   searchProviderStatus,
@@ -133,6 +135,11 @@ const server = createServer(async (request, response) => {
           limitations: webResearch.limitations,
         },
       });
+      // Score every dimension (Afford, Safety, Commute, Transit, Amenity, Lifestyle, Growth,
+      // Match) for each candidate from real named sources, and write the scores into the
+      // ranked rows so the frontend shows numbers instead of "needs source".
+      await applyNeighborhoodScores(localRun, webResearch);
+
       // Per-agent fan-out: each City Agent reasons over its own evidence on the local
       // OpenBMB/llama.cpp worker before the main model synthesises (the hybrid).
       const fanout = await runAgentFanOut(localRun);
@@ -201,6 +208,69 @@ const server = createServer(async (request, response) => {
 server.listen(port, "127.0.0.1", () => {
   console.log(`6ixPulse agent backend listening on http://127.0.0.1:${port}`);
 });
+
+async function applyNeighborhoodScores(localRun, webResearch) {
+  const maxScored = Math.min(localRun.ranked.length, Number(process.env.SCORE_MAX_NEIGHBORHOODS || 6));
+  const targets = localRun.ranked
+    .slice(0, maxScored)
+    .map((row) => ({ id: row.id, name: row.name, center: row.center }))
+    .filter((row) => Array.isArray(row.center));
+
+  // Look up Toronto Police crime rates for every scored candidate (not just research targets).
+  const crimeByName = await crimeRatesByName(targets.map((t) => t.name)).catch(() => ({}));
+
+  let scored;
+  try {
+    scored = await computeNeighborhoodScores(targets, localRun.parsed.weights, crimeByName);
+  } catch {
+    return;
+  }
+
+  const { sources, facts } = scoreFactsAndSources(scored);
+  // Prepend so the richer computed facts win the frontend's first-match lookup.
+  webResearch.facts = [...facts, ...(webResearch.facts || [])];
+  const seen = new Set((webResearch.sources || []).map((s) => s.id));
+  for (const source of sources) {
+    if (!seen.has(source.id)) {
+      webResearch.sources.push(source);
+      seen.add(source.id);
+    }
+  }
+
+  const byId = new Map(scored.map((s) => [s.id, s]));
+  for (const row of localRun.ranked) {
+    const s = byId.get(row.id);
+    if (!s || !s.dims) continue;
+    for (const key of Object.keys(s.dims)) {
+      if (s.dims[key] != null) row.dims[key] = s.dims[key];
+    }
+    if (typeof s.overall === "number") row.overall = s.overall;
+    if (s.commuteMin) {
+      row.comLo = Math.max(1, s.commuteMin - 4);
+      row.comHi = s.commuteMin + 5;
+      row.comMode = "TTC / GO";
+    }
+  }
+  localRun.ranked.sort((a, b) => (b.overall || 0) - (a.overall || 0));
+  localRun.ranked.forEach((row, index) => (row.rank = index + 1));
+  if (localRun.ranked[0]) localRun.selectedId = localRun.ranked[0].id;
+
+  localRun.trace.push({
+    id: `step_${String(localRun.trace.length + 1).padStart(2, "0")}`,
+    tool: "score_neighborhoods",
+    status: "done",
+    input: { neighbourhoods: targets.map((t) => t.name) },
+    output: {
+      scored: scored
+        .filter((s) => s.dims)
+        .map((s) => ({ name: s.name, match: s.overall, ...s.dims })),
+    },
+  });
+}
+
+function normName(value) {
+  return String(value || "").toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]+/g, "");
+}
 
 async function runConfiguredModel(localRun) {
   const provider = configuredProvider();

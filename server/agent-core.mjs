@@ -359,6 +359,21 @@ function buildEvidenceAgentNotes(selected, webResearch) {
     });
   }
 
+  // Attach the computed dimension score to each note so the agent cards show numbers.
+  const dimForAgent = {
+    affordability: "affordability",
+    commute: "commute",
+    safety: "safety",
+    lifestyle: "lifestyle",
+    growth: "growth",
+  };
+  for (const note of notes) {
+    note.score =
+      note.id === "recommendation"
+        ? selected.overall
+        : selected.dims?.[dimForAgent[note.id]] ?? null;
+  }
+
   return notes;
 }
 
@@ -401,7 +416,7 @@ function buildEvidenceRecommendation(run, selected, webResearch, evidenceNotes) 
 }
 
 function sanitizeTrace(trace = []) {
-  const visibleTools = new Set(["discover_neighborhoods", "plan_research", "parse_renter_intent", "housing_web_research", "hf_reasoning", "nvidia_reasoning", "ollama_reasoning", "llamacpp_reasoning"]);
+  const visibleTools = new Set(["discover_neighborhoods", "plan_research", "parse_renter_intent", "housing_web_research", "score_neighborhoods", "hf_reasoning", "nvidia_reasoning", "ollama_reasoning", "llamacpp_reasoning"]);
   return trace
     .filter((step) => visibleTools.has(step.tool) || step.tool.startsWith("agent_"))
     .map((step) => {

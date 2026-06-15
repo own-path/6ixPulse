@@ -50,10 +50,12 @@ export interface AgentBackendRun {
       sourceType: string;
       agentId?: string;
       reliability: string;
+      sourceName?: string;
     }>;
     facts?: Array<{
       id: string;
       sourceId: string;
+      sourceName?: string;
       category: string;
       neighborhood: string;
       label: string;
