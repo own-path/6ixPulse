@@ -23,8 +23,10 @@ tags:
   - achievement:sharing
   - achievement:fieldnotes
 models:
-  - Qwen/Qwen3-Coder-30B-A3B-Instruct
   - nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16
+  - Qwen/Qwen3-Coder-30B-A3B-Instruct
+  - openbmb/MiniCPM4-0.5B
+  - hexgrad/Kokoro-82M
 ---
 
 # 6ixPulse
@@ -56,7 +58,8 @@ The app then ranks Toronto neighborhoods, animates the map to the areas it is re
 - **Fans out a researcher per City Agent.** Affordability, Commute, Safety, Lifestyle and Growth agents each reason over only their own evidence; a **Recommendation agent runs last** with every agent's finding *and* all of their sources.
 - **Fails closed.** The UI withholds a rent, commute, safety, growth claim, or score unless the backend can tie it to source evidence — sources are named, never "S1".
 - **Shows a real Mapbox GL JS 3D map** with a research tour that zooms into each area while it is being researched, then flies out-and-in to the next.
-- **Two-tier brains, all < 32B.** NVIDIA Nemotron Nano Omni Reasoning is the main model (with `enable_thinking`); the small OpenBMB model on llama.cpp assists with summarisation. Falls back to HF when a provider is unavailable.
+- **Reads the findings aloud.** A Play button narrates a short spoken summary using **Kokoro-82M** neural TTS running entirely in the browser — no key, no backend.
+- **Models, all < 32B.** NVIDIA Nemotron Nano Omni Reasoning is the main brain (with `enable_thinking`); the small OpenBMB model on llama.cpp assists with summarisation; Kokoro-82M handles speech. Falls back to HF when a provider is unavailable.
 
 ## Architecture
 
@@ -106,14 +109,16 @@ flowchart TB
   Score --- Transit
   Score --- CMHC
 
-  subgraph Models["Two-tier brains · all under 32B"]
+  subgraph Models["Models · all under 32B"]
     Main["Main: NVIDIA Nemotron Nano Omni Reasoning<br/>temp 0.6 · enable_thinking · reasoning_budget<br/>↳ fallback: HF Qwen3-Coder"]
     Assist["Assistant: OpenBMB MiniCPM via llama.cpp<br/>summarises each agent's evidence"]
+    Speech["Voice: Kokoro-82M neural TTS<br/>in-browser, narrates the summary"]
   end
   Discover --- Main
   Fanout --- Assist
   Fanout --- Main
   Recommend --- Main
+  Panels -. Play .-> Speech
 ```
 
 ## Tech Stack
@@ -128,6 +133,7 @@ flowchart TB
 - Models (all < 32B):
   - Main agentic brain: `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` (build.nvidia.com)
   - Summarisation assistant: OpenBMB MiniCPM via llama.cpp (`openbmb/MiniCPM4-*-GGUF`)
+  - Speech: `hexgrad/Kokoro-82M` neural TTS in the browser (transformers.js)
   - Fallback: `Qwen/Qwen3-Coder-30B-A3B-Instruct` on the HF Router
 
 ## Build Small Hackathon Readiness
@@ -213,6 +219,8 @@ HF_MODEL=Qwen/Qwen3-Coder-30B-A3B-Instruct
 ```
 
 The reasoning model uses the Nemotron recipe (matching `ChatNVIDIA`): `temperature=0.6`, `top_p=0.95`, `chat_template_kwargs={"enable_thinking": true}`, and a `reasoning_budget`; its `<think>` reasoning is captured separately from the JSON answer. Thinking is enabled only for the decisions (discovery, recommendation, synthesis), and the per-agent fan-out runs in parallel on hosted APIs, so a full run stays within the response budget.
+
+For speech, the Play button uses **`hexgrad/Kokoro-82M`** neural TTS via `transformers.js`, running fully in the browser (ONNX/WASM). It is lazy-loaded — the ~80 MB model only downloads on the first Play, then is cached — and falls back to the browser's built-in speech while it loads or where it can't run. No key, no backend, 82M parameters.
 
 ## Gradio Space
 
@@ -320,6 +328,7 @@ Dockerfile                     Docker Space image with Node + Python
 src/App.tsx                    app shell, agent panels, scores, listings
 src/components/MapCanvas.tsx   Mapbox/deck.gl map + research tour
 src/lib/agentApi.ts            frontend API client types
+src/lib/tts.ts                 Kokoro-82M in-browser narration
 server/index.mjs               agent API server; orchestrates the pipeline
 server/discover.mjs            model-driven neighbourhood discovery (+ coordinates)
 server/score-tools.mjs         8-dimension scoring from named no-key sources
