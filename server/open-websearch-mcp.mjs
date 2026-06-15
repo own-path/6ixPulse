@@ -53,7 +53,7 @@ async function handleMessage(line) {
             {
               name: "web_search",
               description:
-                "No-key web search using public web result pages. Returns title, URL, snippet, and engine.",
+                "Optional lightweight web-result discovery. Returns title, URL, snippet, and engine.",
               inputSchema: {
                 type: "object",
                 properties: {
@@ -94,7 +94,7 @@ async function handleMessage(line) {
       const payload = {
         query,
         results,
-        note: "No-key public search can be blocked or rate-limited. Verify sources before presenting facts.",
+        note: "Search results can be blocked, rate-limited, incomplete, or stale. Verify sources before presenting facts.",
       };
 
       send({
@@ -122,14 +122,7 @@ async function handleMessage(line) {
 async function multiEngineSearch(query, count) {
   const seen = new Set();
   const output = [];
-  // Bing's RSS feed was removed: it returned entity/dictionary cards ("East - Wikipedia",
-  // "EAST | Merriam-Webster") instead of results — the source of all the junk.
-  // When FlareSolverr is configured (FLARESOLVERR_URL), Google is searched first: a headless
-  // browser solves the Cloudflare/bot checks that block listing/review sites, giving real
-  // person-like deep research with no API key. DuckDuckGo HTML/Lite are the keyless fallback.
-  const engines = flareSolverrUrl()
-    ? [searchGoogle, searchDuckDuckGoHtml, searchDuckDuckGoLite]
-    : [searchDuckDuckGoHtml, searchDuckDuckGoLite];
+  const engines = [searchDuckDuckGoHtml, searchDuckDuckGoLite];
 
   for (const engine of engines) {
     try {
@@ -200,45 +193,7 @@ async function searchDuckDuckGoHtml(query, count) {
   return results;
 }
 
-async function searchGoogle(query, count) {
-  const url = new URL("https://www.google.com/search");
-  url.searchParams.set("q", query);
-  url.searchParams.set("num", String(Math.min(count + 4, 20)));
-  url.searchParams.set("hl", "en");
-  url.searchParams.set("gl", "ca");
-  const html = await fetchText(url);
-  const results = [];
-  const seen = new Set();
-  // Google wraps each organic result link as <a href="/url?q=<real>&..."> or a direct href.
-  const linkRe = /<a href="(\/url\?q=|https?:\/\/)([^"&]+)[^"]*"[^>]*>/gi;
-  let match;
-  while ((match = linkRe.exec(html)) && results.length < count) {
-    const raw = match[1].startsWith("/url") ? decodeURIComponent(match[2]) : `${match[1]}${match[2]}`;
-    const link = normalizeUrl(decodeHtml(raw));
-    if (!link || seen.has(link)) continue;
-    if (/google\.|gstatic\.|youtube\.com\/redirect|\/search\?/.test(link)) continue;
-    seen.add(link);
-    results.push({ title: domainTitle(link), url: link, snippet: "", engine: "google" });
-  }
-  return results;
-}
-
-function domainTitle(url) {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return url;
-  }
-}
-
-function flareSolverrUrl() {
-  return process.env.FLARESOLVERR_URL || "";
-}
-
 async function fetchText(url) {
-  const solver = flareSolverrUrl();
-  if (solver) return fetchViaFlareSolverr(String(url), solver);
-
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
   try {
@@ -253,35 +208,6 @@ async function fetchText(url) {
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return await response.text();
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-// FlareSolverr (https://github.com/FlareSolverr/FlareSolverr) runs a headless browser that
-// solves Cloudflare/bot challenges, so listing and review sites that block plain fetches
-// become readable — no API key, just a local container:
-//   docker run -d -p 8191:8191 ghcr.io/flaresolverr/flaresolverr:latest
-async function fetchViaFlareSolverr(targetUrl, solverBase) {
-  const endpoint = `${solverBase.replace(/\/$/, "")}/v1`;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), Number(process.env.FLARESOLVERR_TIMEOUT_MS || 45000));
-  try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        cmd: "request.get",
-        url: targetUrl,
-        maxTimeout: Number(process.env.FLARESOLVERR_MAX_TIMEOUT_MS || 40000),
-      }),
-      signal: controller.signal,
-    });
-    if (!response.ok) throw new Error(`FlareSolverr HTTP ${response.status}`);
-    const data = await response.json();
-    const html = data?.solution?.response;
-    if (!html) throw new Error("FlareSolverr returned no page content");
-    return html;
   } finally {
     clearTimeout(timeout);
   }

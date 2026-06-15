@@ -47,7 +47,7 @@ The app then ranks Toronto neighborhoods, animates the map to the areas it is re
   - Lifestyle
   - Future Growth
   - Recommendation
-- Runs contextual web research through a no-key MCP search sidecar.
+- Runs contextual research from official data by default, with optional API-backed search providers.
 - Checks official Toronto sources first, including Toronto Open Data and Toronto Police neighborhood crime-rate data.
 - Uses a source-backed display policy: the UI withholds rents, commute claims, safety claims, and scores unless matching evidence or computed facts exist.
 - Animates a research tour across the top areas so the map zooms to the places being evaluated.
@@ -67,8 +67,8 @@ flowchart TD
   Ranker --> Agents["Agent planner\nAffordability, Commute, Safety,\nLifestyle, Growth, Recommendation"]
 
   Agents --> Official["Authoritative data tools\nToronto Open Data, Police crime rates,\npermits, TTC references, StatCan"]
-  Agents --> MCP["Open-WebSearch MCP sidecar\nDuckDuckGo HTML + Bing RSS\nno API key required"]
-  MCP --> Filter["Backend domain filter\nkeeps only allowed source domains"]
+  Agents --> APIProviders["Optional search APIs\nGoogle CSE, SerpAPI, Brave, Tavily"]
+  APIProviders --> Filter["Backend domain filter\nkeeps only allowed source domains"]
   Official --> Evidence["Evidence bundle\nsources, facts, limitations"]
   Filter --> Evidence
 
@@ -88,7 +88,7 @@ flowchart TD
 - Backend: Node HTTP server
 - Space wrapper: `gradio.Server` on FastAPI, Docker Space
 - Agent orchestration: local tool trace plus model synthesis
-- Web research: bundled MCP-compatible no-key search server
+- Web research: official data by default, optional API-backed providers
 - Models:
   - Primary hackathon model: `nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16`
   - Optional HF Router fallback: `Qwen/Qwen3-Coder-30B-A3B-Instruct`
@@ -149,8 +149,8 @@ This matters because housing decisions are high-stakes. A pretty map with fake c
 The default search provider is:
 
 ```bash
-SEARCH_PROVIDER=mcp_open_websearch
-MCP_WEB_SEARCH_ENABLED=1
+SEARCH_PROVIDER=disabled
+MCP_WEB_SEARCH_ENABLED=0
 MCP_WEB_SEARCH_TIMEOUT_MS=6000
 MCP_WEB_SEARCH_TOOL=web_search
 RESEARCH_DEPTH=standard
@@ -159,15 +159,7 @@ RESEARCH_RESULTS_PER_QUERY=3
 RESEARCH_TOTAL_TIMEOUT_MS=45000
 ```
 
-The bundled sidecar lives at:
-
-```text
-server/open-websearch-mcp.mjs
-```
-
-It exposes a `web_search` MCP tool and searches public DuckDuckGo HTML plus Bing RSS without an API key. Public search can still be rate-limited or incomplete, so the backend applies domain filtering and keeps limitations in the research payload.
-
-The hosted Space uses bounded search defaults so public no-key search does not block the agent response. For slower, deeper research runs, increase `RESEARCH_MAX_QUERIES`, `RESEARCH_TOTAL_TIMEOUT_MS`, and `MCP_WEB_SEARCH_TIMEOUT_MS`, or switch to an API-backed provider.
+The hosted Space runs in official-data-only mode by default so it stays stable and policy-safe. For richer contextual research, configure one of the supported API-backed providers; the backend still applies domain filtering and keeps limitations in the research payload.
 
 Optional API providers remain supported:
 
@@ -252,8 +244,8 @@ AGENT_MODEL_PROVIDER=nvidia
 NVIDIA_MODEL=nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16
 NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1
 NVIDIA_ENABLE_THINKING=1
-SEARCH_PROVIDER=mcp_open_websearch
-MCP_WEB_SEARCH_ENABLED=1
+SEARCH_PROVIDER=disabled
+MCP_WEB_SEARCH_ENABLED=0
 MCP_WEB_SEARCH_TIMEOUT_MS=6000
 RESEARCH_DEPTH=standard
 RESEARCH_MAX_QUERIES=6
@@ -326,7 +318,7 @@ src/lib/agentApi.ts            frontend API client types
 server/index.mjs               local agent API server
 server/agent-core.mjs          local tool loop, trace, evidence policy
 server/research-tools.mjs      official data + web research planner
-server/open-websearch-mcp.mjs  no-key MCP web-search sidecar
+server/open-websearch-mcp.mjs  optional lightweight MCP search sidecar
 server/hf-client.mjs           Hugging Face Router client
 server/nvidia-client.mjs       NVIDIA NIM client
 server/ollama-client.mjs       Ollama client

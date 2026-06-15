@@ -542,7 +542,7 @@ async function runAuthoritativeResearch(localRun, env) {
     );
   }
 
-  // Map coordinates only (not shown as a research source): a no-key lookup of each area's
+  // Map coordinates only (not shown as a research source): a public metadata lookup of each area's
   // centre so the map can place dynamically-discovered neighbourhoods. The user-facing
   // housing evidence comes from official data + deep web research, not encyclopedia text.
   try {
@@ -1209,7 +1209,7 @@ function disabledResearch(reason, env) {
 function researchLimitations(provider) {
   if (provider === "mcp_open_websearch") {
     return [
-      "Open-WebSearch MCP uses no-key public search pages; results can be blocked, rate-limited, incomplete, or stale.",
+      "Open-WebSearch MCP is optional; results can be blocked, rate-limited, incomplete, or stale.",
       "Search snippets are source discovery only. User-facing rent, commute, safety, review, and market claims still require computed facts.",
       "Use official feeds and licensed listing sources for production-grade housing decisions.",
     ];
@@ -1218,7 +1218,7 @@ function researchLimitations(provider) {
   return [
     `Search results come from ${provider}; snippets can be incomplete or stale.`,
     "Listing pages, Google reviews, and social posts should be verified directly before making housing decisions.",
-    "The tool avoids direct scraping of Zillow, Realtor, Google, and Reddit pages; use official APIs or search snippets where available.",
+    "Use official APIs or licensed feeds for listing, review, and social-source research.",
   ];
 }
 
@@ -1230,7 +1230,7 @@ function missingSearchProviderMessage(env) {
     )}. Add those values for listings, Reddit, review, and market-source research.`;
   }
 
-  return "No web search provider is configured. Use SEARCH_PROVIDER=mcp_open_websearch for no-key MCP search, or add GOOGLE_SEARCH_API_KEY + GOOGLE_SEARCH_CX, SERPAPI_API_KEY, BRAVE_SEARCH_API_KEY, or TAVILY_API_KEY.";
+  return "No web search provider is configured. Keep SEARCH_PROVIDER=disabled for official-data-only runs, or add GOOGLE_SEARCH_API_KEY + GOOGLE_SEARCH_CX, SERPAPI_API_KEY, BRAVE_SEARCH_API_KEY, or TAVILY_API_KEY.";
 }
 
 function reliabilityFor(sourceType) {

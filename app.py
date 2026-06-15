@@ -43,8 +43,8 @@ def start_node_backend() -> None:
     env.setdefault("AGENT_MODEL_PROVIDER", "auto")
     # Hosted NIM id. The HF repo "...-BF16" has no inference provider and cannot be called.
     env.setdefault("NVIDIA_MODEL", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning")
-    env.setdefault("SEARCH_PROVIDER", "mcp_open_websearch")
-    env.setdefault("MCP_WEB_SEARCH_ENABLED", "1")
+    env.setdefault("SEARCH_PROVIDER", "disabled")
+    env.setdefault("MCP_WEB_SEARCH_ENABLED", "0")
     env.setdefault("MCP_WEB_SEARCH_TIMEOUT_MS", "6000")
     env.setdefault("RESEARCH_ENABLED", "1")
     env.setdefault("RESEARCH_DEPTH", "standard")
