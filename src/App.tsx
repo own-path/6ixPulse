@@ -26,7 +26,7 @@ import {
 import MapCanvas from "./components/MapCanvas";
 import { DIMENSIONS, type DimensionKey, type LayerKey } from "./data/neighborhoods";
 import { runAgentBackend, type AgentBackendRun } from "./lib/agentApi";
-import { synthesizeKokoro } from "./lib/tts";
+import { preloadKokoro, synthesizeKokoro } from "./lib/tts";
 import {
   agentDimension,
   cityAgents,
@@ -185,6 +185,9 @@ export default function App() {
     const backendPromise = runAgentBackend(ask);
 
     clearSchedules();
+    // Warm the TTS model (off-thread) during research so summaries can be voiced the moment
+    // the agent finishes — the download happens while the agents work.
+    preloadKokoro();
     // The prompt is in flight; clear the composer so the next ask starts from a blank box.
     setHasRun(true);
     setPrompt("");
@@ -746,6 +749,16 @@ function DetailPanel({
   );
   const audioKey = useMemo(() => summaryAudioKey(selected.id, spokenText), [selected.id, spokenText]);
   const shouldPrepareAudio = Boolean(recommendation?.summary);
+  // Audio for every candidate, so switching neighbourhoods plays instantly. Generation runs in
+  // the TTS worker (off the main thread) and is serialized there, so this never blocks the UI.
+  const allAudioItems = useMemo(
+    () =>
+      ranked.map((neighborhood) => {
+        const text = buildSpokenSummary(neighborhood, recommendation, webResearch);
+        return { key: summaryAudioKey(neighborhood.id, text), text };
+      }),
+    [ranked, recommendation, webResearch],
+  );
 
   const stopPlaybackOnly = useCallback(() => {
     if (audioRef.current) {
@@ -765,18 +778,32 @@ function DetailPanel({
     setAudioState(shouldPrepareAudio ? "ready" : "idle");
   }, [shouldPrepareAudio]);
 
-  // Stop any playback and reset state when the neighbourhood or summary changes. Audio is
-  // generated ONLY when the user clicks Play (in togglePlay) — never eagerly — so the heavy
-  // in-browser TTS never blocks scrolling or the rest of the UI.
+  // When the summary is ready, start generating its audio in the background (off the main
+  // thread, in the TTS worker) so it's ready the instant the user hits Play. The button stays
+  // in the "ready" (Play) state — generation never blocks scrolling or the rest of the UI, and
+  // a click while it's still generating just waits for it (handled in togglePlay).
   useEffect(() => {
     reqRef.current += 1;
     stopPlaybackOnly();
-    setAudioState(shouldPrepareAudio ? "ready" : "idle");
+    if (shouldPrepareAudio) {
+      prepareSummaryAudio(audioKey, spokenText);
+      setAudioState("ready");
+    } else {
+      setAudioState("idle");
+    }
     return () => {
       reqRef.current += 1;
       stopPlaybackOnly();
     };
-  }, [audioKey, shouldPrepareAudio, stopPlaybackOnly]);
+  }, [audioKey, shouldPrepareAudio, spokenText, stopPlaybackOnly]);
+
+  // Pre-generate audio for ALL candidates in the background (worker-queued after the selected
+  // one), so any neighbourhood the user clicks can speak instantly. Off-thread = no UI block.
+  useEffect(() => {
+    if (!shouldPrepareAudio) return;
+    allAudioItems.forEach((item) => prepareSummaryAudio(item.key, item.text));
+    pruneSummaryAudioCache(new Set(allAudioItems.map((item) => item.key)));
+  }, [allAudioItems, shouldPrepareAudio]);
 
   const togglePlay = async () => {
     if (audioState === "generating") return;
@@ -1319,8 +1346,10 @@ function prepareSummaryAudio(key: string, text: string, options: { force?: boole
   };
   entry.promise = synthesizeKokoro(text)
     .then((url) => {
+      // null = worker/model unavailable; mark as error so the caller falls back to browser speech.
       entry.url = url;
-      entry.status = "ready";
+      entry.status = url ? "ready" : "error";
+      if (!url) entry.promise = null;
       entry.lastUsed = Date.now();
       return url;
     })
