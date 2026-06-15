@@ -31,6 +31,10 @@ models:
 
 6ixPulse is an agentic Toronto housing intelligence map for renters who do not want to choose a neighborhood from vibes, stale listicles, or one-off anecdotes.
 
+## Codex Attribution
+
+This repository was developed with assistance from OpenAI Codex for implementation, debugging, verification, and repository preparation. Product direction, final decisions, and submission review remain human-owned.
+
 ## Why I Built This
 
 I am looking to move, and moving means doing a lot of research before committing to a place. Rent is only one part of the decision. I also need to understand commute time, safety signals, neighborhood feel, access to daily needs, and whether an area is getting better or just getting more expensive.
@@ -137,7 +141,7 @@ The official Build Small Field Guide requires every model to stay under 32B para
 | Agentic app | On track | Multi-step planning, tool use, domain-scoped search, evidence policy, and model synthesis. |
 | Custom UI | On track | The app is a custom map-first interface rather than default Gradio components. |
 | README tags | Done | Tags are in the YAML block at the top of this README. |
-| Codex prize | On track | This repo is being prepared and pushed through Codex. Keep Codex-attributed commits in the connected GitHub repo or Space history. |
+| Codex prize | Done | This README includes Codex attribution, and the repo is being prepared and pushed through Codex. Keep Codex-attributed commits in the connected GitHub repo or Space history. |
 | Gradio Space | Uploaded | Live Space: https://huggingface.co/spaces/build-small-hackathon/6ixPulse. Add Space secrets before judging so Mapbox and NVIDIA calls are live. |
 | Demo video | Pending | Add a public demo video link before submission. |
 | Social post | Pending | Add a social post link before submission. |
