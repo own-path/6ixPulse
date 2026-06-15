@@ -11,7 +11,7 @@ import { discoverNeighborhoods, buildDiscoveredRows } from "./discover.mjs";
 import { computeNeighborhoodScores, scoreFactsAndSources } from "./score-tools.mjs";
 import {
   configuredSearchProvider,
-  crimeRatesByName,
+  crimeRatesByLocation,
   runGoogleSearchProbe,
   runHousingResearch,
   searchProviderStatus,
@@ -237,8 +237,11 @@ async function applyNeighborhoodScores(localRun, webResearch) {
     .map((row) => ({ id: row.id, name: row.name, center: row.center }))
     .filter((row) => Array.isArray(row.center));
 
-  // Look up Toronto Police crime rates for every scored candidate (not just research targets).
-  const crimeByName = await crimeRatesByName(targets.map((t) => t.name)).catch(() => ({}));
+  // Look up Toronto Police crime rates by location (point-in-polygon on each area's centre),
+  // so Safety resolves for every candidate regardless of the model's chosen name.
+  const crimeByName = await crimeRatesByLocation(
+    targets.map((t) => ({ name: t.name, center: t.center })),
+  ).catch(() => ({}));
 
   let scored;
   try {

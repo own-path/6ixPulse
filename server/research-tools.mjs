@@ -625,30 +625,68 @@ async function fetchWikipediaSummaryByTitle(name, timeoutMs) {
   }
 }
 
-// Match the Toronto Police neighbourhood crime dataset for any list of names (used by the
-// scorer so safety is computed for every candidate, not just the top research targets).
-export async function crimeRatesByName(names, env = process.env) {
+// Match the Toronto Police neighbourhood crime dataset by LOCATION first: each discovered
+// area's centre is tested against every neighbourhood polygon (point-in-polygon), so safety
+// resolves even when the model's name doesn't match an official neighbourhood. Falls back to
+// fuzzy name matching. `neighborhoods` is [{ name, center:[lng,lat] }].
+export async function crimeRatesByLocation(neighborhoods, env = process.env) {
   const out = {};
-  if (env.OFFICIAL_DATA_ENABLED === "0" || !Array.isArray(names) || !names.length) return out;
+  if (env.OFFICIAL_DATA_ENABLED === "0" || !Array.isArray(neighborhoods) || !neighborhoods.length) return out;
   try {
     const rows = await fetchCkanRecords(TORONTO_DATASETS.crimeRates.resourceId, env);
-    for (const name of names) {
-      const row = matchNeighborhoodRecord(name, rows);
+    for (const n of neighborhoods) {
+      const center = Array.isArray(n.center) ? n.center : null;
+      let row = center && Number.isFinite(center[0])
+        ? rows.find((r) => pointInGeometry(center, r.geometry))
+        : null;
+      if (!row) row = matchNeighborhoodRecord(n.name, rows);
       if (!row) continue;
-      const fact = safetyFactFromCrimeRow(row, name, "police");
+      const fact = safetyFactFromCrimeRow(row, n.name, "police");
       if (!fact) continue;
       const year = (String(fact.label).match(/20\d\d/) || [])[0];
       const countMatch = String(fact.detail).match(/^([\d,]+)/);
-      out[normalizeName(name)] = {
+      out[normalizeName(n.name)] = {
         rate: Number(fact.value),
         year,
         count: countMatch ? Number(countMatch[1].replace(/,/g, "")) : null,
+        areaName: row.AREA_NAME,
       };
     }
   } catch {
     /* official data is optional */
   }
   return out;
+}
+
+function pointInGeometry(point, geometry) {
+  let geo = geometry;
+  if (typeof geo === "string") {
+    try {
+      geo = JSON.parse(geo);
+    } catch {
+      return false;
+    }
+  }
+  if (!geo) return false;
+  const polygons = geo.type === "MultiPolygon" ? geo.coordinates : geo.type === "Polygon" ? [geo.coordinates] : [];
+  const [x, y] = point;
+  for (const polygon of polygons) {
+    const ring = polygon?.[0];
+    if (Array.isArray(ring) && pointInRing(x, y, ring)) return true;
+  }
+  return false;
+}
+
+function pointInRing(x, y, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0];
+    const yi = ring[i][1];
+    const xj = ring[j][0];
+    const yj = ring[j][1];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
 }
 
 function sourceFromDataset(key, neighborhoods) {

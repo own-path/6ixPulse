@@ -153,6 +153,8 @@ export default function App() {
     const backendPromise = runAgentBackend(prompt);
 
     clearSchedules();
+    // The prompt is in flight; reset the composer back to the template so the next ask starts fresh.
+    setPrompt(defaultPrompt);
     setParsed(nextParsed);
     setRanked(nextRanked);
     setPhase("running");
@@ -780,26 +782,25 @@ function DetailPanel({
             sourced={Boolean(commuteFact)}
           />
           <EvidenceMetric
-            label={growthFact?.label ?? "Rent trend"}
+            label={growthFact?.label ?? "Development"}
             value={growthFact ? formatFactValue(growthFact) : "Needs source"}
             detail={growthFact?.detail ?? "Use permits, CMHC/market data, or listing history before showing a trend."}
             sourced={Boolean(growthFact)}
-            graphic={growthFact ? <Sparkline selected={selected} /> : null}
           />
         </div>
 
-        <p className="tradeoff">
-          <AlertTriangle size={14} />
-          {recommendation?.citations?.length
-            ? "Model synthesis is available, but unsupported tradeoffs stay hidden until converted into computed facts."
-            : "No unsourced tradeoff is shown until research evidence is available."}
-        </p>
+        {recommendation?.cautions?.length ? (
+          <p className="tradeoff">
+            <AlertTriangle size={14} />
+            {recommendation.cautions[0]}
+          </p>
+        ) : null}
 
         <div className="detail-actions">
           <button
             type="button"
             className="primary-action"
-            onClick={() => openListings(selected.name, parsed.budget)}
+            onClick={() => openListings(selected.name)}
           >
             View Listings
           </button>
@@ -1108,16 +1109,16 @@ function factSource(fact: ResearchFact) {
   return fact.sourceName || fact.sourceId;
 }
 
-// Opens current rental listings for the area + budget in a new tab. Real listing sites
-// (rentals.ca, realtor.ca, etc.) block server scraping, but load fine in a real browser —
-// so this hands the search to the user instead of the agent scraping blocked pages.
-function openListings(name: string, budget: number) {
-  const query = `${name} Toronto apartments for rent${budget ? ` under $${budget.toLocaleString()}` : ""}`;
-  window.open(
-    `https://www.google.com/search?q=${encodeURIComponent(query)}`,
-    "_blank",
-    "noopener,noreferrer",
-  );
+// Opens the neighbourhood's listings on a real rentals site (no budget/commute filters from
+// the prompt) in a new tab. Listing sites block server scraping but load fine in a real
+// browser, so the user gets live listings without the agent scraping blocked pages.
+function openListings(name: string) {
+  const slug = name
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  window.open(`https://rentals.ca/toronto/${slug}`, "_blank", "noopener,noreferrer");
 }
 
 function TowerLogo() {
