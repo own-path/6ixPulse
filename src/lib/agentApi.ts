@@ -77,7 +77,7 @@ export interface AgentBackendRun {
 
 export async function runAgentBackend(prompt: string): Promise<AgentBackendRun | null> {
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 26000);
+  const timeout = window.setTimeout(() => controller.abort(), 70000);
 
   try {
     const response = await fetch("/api/agent/run", {

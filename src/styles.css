@@ -215,52 +215,6 @@ textarea:focus-visible {
   backdrop-filter: blur(12px);
 }
 
-.map-research-pill {
-  position: absolute;
-  left: 50%;
-  top: 72px;
-  z-index: 36;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 190px;
-  justify-content: center;
-  transform: translateX(-50%);
-  padding: 9px 14px;
-  border: 1px solid rgba(68, 96, 133, 0.2);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.78);
-  color: var(--text-muted);
-  box-shadow: 0 14px 36px rgba(32, 50, 77, 0.12);
-  backdrop-filter: blur(14px);
-}
-
-.map-research-pill span {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--map-600);
-  box-shadow: 0 0 0 6px rgba(95, 127, 170, 0.14);
-  animation: pulse 1.35s ease-in-out infinite;
-}
-
-.map-research-pill small {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0;
-}
-
-.map-research-pill strong {
-  max-width: 190px;
-  overflow: hidden;
-  color: var(--text-strong);
-  font-family: "Space Grotesk", system-ui, sans-serif;
-  font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .map-controls {
   position: absolute;
   right: 16px;
@@ -561,6 +515,7 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   gap: 8px;
+  max-width: min(460px, calc(100vw - 420px));
   transform: translateX(-50%);
   padding: 7px 13px;
   border: 1px solid var(--panel-border);
@@ -571,7 +526,13 @@ textarea:focus-visible {
   backdrop-filter: blur(12px);
 }
 
+.active-layer-chip.running {
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 14px 34px rgba(32, 50, 77, 0.12);
+}
+
 .active-layer-chip span {
+  flex: 0 0 auto;
   width: 7px;
   height: 7px;
   border-radius: 50%;
@@ -579,8 +540,21 @@ textarea:focus-visible {
   box-shadow: 0 0 12px rgba(48, 75, 120, 0.55);
 }
 
+.active-layer-chip small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .active-layer-chip strong {
+  min-width: 0;
+  overflow: hidden;
   color: var(--text-strong);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .top-actions {
@@ -763,6 +737,7 @@ textarea:focus-visible {
 .result-meta,
 .result-bottom {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 9px;
 }
@@ -826,19 +801,23 @@ textarea:focus-visible {
 }
 
 .result-meta {
+  flex-wrap: wrap;
   padding-left: 25px;
 }
 
 .result-meta small {
   display: inline-flex;
+  min-width: 0;
   align-items: center;
   gap: 5px;
   color: var(--text-muted);
   font-size: 12px;
-  white-space: nowrap;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .result-bottom {
+  flex-wrap: wrap;
   padding-left: 25px;
 }
 
@@ -853,6 +832,12 @@ textarea:focus-visible {
   font-size: 10.5px;
   font-style: normal;
   font-weight: 700;
+}
+
+.result-bottom em,
+.priority-block span {
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .mini-metric {
@@ -870,6 +855,7 @@ textarea:focus-visible {
   font-size: 10.5px;
   font-style: normal;
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .mini-metric i,
@@ -1039,6 +1025,7 @@ textarea:focus-visible {
   max-height: calc(100vh - 126px);
   flex-direction: column;
   gap: 12px;
+  overflow-x: hidden;
   overflow-y: auto;
   padding-bottom: 4px;
 }
@@ -1110,6 +1097,7 @@ textarea:focus-visible {
 
 .data-gap {
   display: flex;
+  min-width: 0;
   align-items: flex-start;
   gap: 8px;
   border: 1px solid rgba(68, 96, 133, 0.13);
@@ -1125,6 +1113,11 @@ textarea:focus-visible {
   flex: 0 0 auto;
   margin-top: 1px;
   color: var(--map-700);
+}
+
+.data-gap span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .research-panel {
@@ -1242,15 +1235,22 @@ textarea:focus-visible {
 
 .detail-head {
   display: flex;
+  min-width: 0;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 16px;
 }
 
+.detail-head > div {
+  min-width: 0;
+}
+
 .detail-head h2,
 .agent-head h2,
 .compare-head h2 {
+  min-width: 0;
+  overflow-wrap: anywhere;
   margin: 0;
   color: var(--text-strong);
   font-family: "Space Grotesk", system-ui, sans-serif;
@@ -1259,7 +1259,9 @@ textarea:focus-visible {
 }
 
 .detail-head span {
+  max-width: 100%;
   margin-top: 8px;
+  overflow-wrap: anywhere;
 }
 
 .detail-panel h3 {
@@ -1276,11 +1278,13 @@ textarea:focus-visible {
 
 .why-list span {
   display: flex;
+  min-width: 0;
   align-items: flex-start;
   gap: 8px;
   color: var(--text);
   font-size: 12.5px;
   line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .why-list span.good svg {
@@ -1293,48 +1297,80 @@ textarea:focus-visible {
 
 .detail-split {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin: 16px 0 14px;
+  grid-template-columns: 1fr;
+  gap: 9px;
+  margin: 16px 0 12px;
 }
 
-.detail-split > span,
-.trend-block {
+.evidence-metric {
   display: flex;
+  min-width: 0;
   flex-direction: column;
-  gap: 4px;
+  gap: 7px;
   border: 1px solid rgba(68, 96, 133, 0.12);
   border-radius: 8px;
   padding: 10px;
   background: rgba(255, 255, 255, 0.56);
 }
 
-.detail-split small,
-.trend-block small {
+.evidence-metric.sourced {
+  border-color: rgba(48, 75, 120, 0.18);
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.evidence-metric > div {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.evidence-metric small {
+  min-width: 0;
+  overflow: hidden;
   color: var(--text-muted);
   font-size: 10.5px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
-.detail-split strong,
-.trend-block strong {
+.evidence-metric strong {
+  min-width: 0;
+  max-width: 128px;
+  overflow-wrap: anywhere;
   color: var(--text-strong);
   font-family: "Space Grotesk", system-ui, sans-serif;
-  font-size: 17px;
+  font-size: 14.5px;
+  line-height: 1.15;
+  text-align: right;
 }
 
-.trend-block {
-  margin-bottom: 12px;
+.evidence-metric p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
-.trend-block svg {
+.metric-graphic {
+  min-width: 0;
+}
+
+.metric-graphic svg {
   width: 100%;
   height: 56px;
 }
 
 .tradeoff {
   display: flex;
+  min-width: 0;
   gap: 8px;
   color: var(--text-muted);
+  overflow-wrap: anywhere;
 }
 
 .tradeoff svg {
@@ -1413,6 +1449,7 @@ textarea:focus-visible {
 }
 
 .agent-card {
+  min-width: 0;
   border: 1px solid rgba(68, 96, 133, 0.12);
   border-radius: 8px;
   padding: 11px;
@@ -1421,7 +1458,8 @@ textarea:focus-visible {
 
 .agent-row {
   display: grid;
-  grid-template-columns: 34px 1fr auto 30px;
+  min-width: 0;
+  grid-template-columns: 34px minmax(0, 1fr) minmax(58px, auto) 28px;
   align-items: center;
   gap: 9px;
 }
@@ -1444,11 +1482,16 @@ textarea:focus-visible {
 }
 
 .agent-row em {
+  min-width: 0;
+  overflow: hidden;
   border-radius: 7px;
   padding: 3px 7px;
   font-size: 10px;
   font-style: normal;
   font-weight: 700;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .agent-row em.queued {
@@ -1472,9 +1515,12 @@ textarea:focus-visible {
 }
 
 .agent-row b {
+  min-width: 0;
+  overflow: hidden;
   font-family: "Space Grotesk", system-ui, sans-serif;
   font-size: 14px;
   text-align: right;
+  text-overflow: ellipsis;
 }
 
 .agent-source-count {
@@ -1489,6 +1535,7 @@ textarea:focus-visible {
   color: var(--text-muted);
   font-size: 10px;
   font-weight: 800;
+  overflow-wrap: anywhere;
 }
 
 .agent-lines {
@@ -1500,14 +1547,17 @@ textarea:focus-visible {
 }
 
 .agent-lines small {
+  min-width: 0;
   color: var(--text-muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 10.5px;
+  overflow-wrap: anywhere;
 }
 
 .agent-card p {
   margin-top: 9px;
   padding-left: 43px;
+  overflow-wrap: anywhere;
 }
 
 .agent-progress {
@@ -1699,6 +1749,7 @@ textarea:focus-visible {
 
   .active-layer-chip {
     top: 68px;
+    max-width: calc(100vw - 24px);
   }
 
   .collapsed-panel-tab {

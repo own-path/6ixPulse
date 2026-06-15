@@ -92,6 +92,26 @@ const TORONTO_DATASETS = {
     snippet:
       "Route computation for commute time estimates when a Google Maps Platform key is configured.",
   },
+  cmhcRentalMarket: {
+    title: "CMHC Housing Market Information Portal: Rental Market Data",
+    url: "https://www03.cmhc-schl.gc.ca/hmip-pimh/en",
+    category: "rent",
+    sourceType: "market_rent_report",
+    agentId: "affordability",
+    reliability: "medium",
+    snippet:
+      "CMHC rental-market data portal used as official Canadian rental market context before presenting rent claims.",
+  },
+  rentalsCaRentReport: {
+    title: "Rentals.ca National Rent Report",
+    url: "https://rentals.ca/national-rent-report",
+    category: "rent",
+    sourceType: "market_rent_report",
+    agentId: "affordability",
+    reliability: "medium",
+    snippet:
+      "Canadian rent report used as market context for current rental conditions and trends.",
+  },
 };
 
 const SOURCE_CATEGORIES = [
@@ -132,6 +152,11 @@ export async function runHousingResearch(localRun, env = process.env) {
   const official = await runAuthoritativeResearch(localRun, env);
   const provider = configuredSearchProvider(env);
   if (provider === "disabled") {
+    const facts = deriveContextualFacts({
+      targetNeighborhoods: official.targetNeighborhoods,
+      sources: official.sources,
+      facts: official.facts,
+    });
     return {
       enabled: official.sources.length > 0,
       provider: official.sources.length ? "official-open-data" : "disabled",
@@ -139,7 +164,7 @@ export async function runHousingResearch(localRun, env = process.env) {
       targetNeighborhoods: official.targetNeighborhoods,
       queries: [],
       sources: official.sources,
-      facts: official.facts,
+      facts,
       limitations: [
         ...official.limitations,
         missingSearchProviderMessage(env),
@@ -211,16 +236,139 @@ export async function runHousingResearch(localRun, env = process.env) {
     );
   }
 
+  const targetNeighborhoods = localRun.ranked.slice(0, neighborhoodCount(env)).map((row) => row.name);
+  const facts = deriveContextualFacts({
+    targetNeighborhoods,
+    sources,
+    facts: official.facts,
+  });
+
   return {
     enabled: true,
     provider,
     generatedAt: new Date().toISOString(),
-    targetNeighborhoods: localRun.ranked.slice(0, neighborhoodCount(env)).map((row) => row.name),
+    targetNeighborhoods,
     queries: queryReports,
     sources,
-    facts: official.facts,
+    facts,
     limitations,
   };
+}
+
+function deriveContextualFacts({ targetNeighborhoods, sources, facts }) {
+  const output = [...facts];
+
+  for (const neighborhood of targetNeighborhoods) {
+    if (!findFact(output, neighborhood, "rent")) {
+      const rentSources = sourcesForNeighborhood(sources, neighborhood).filter((source) =>
+        ["market_listing", "market_context", "market_rent_report"].includes(source.sourceType) ||
+        source.agentId === "affordability",
+      );
+      if (rentSources.length) {
+        output.push(sourceCoverageFact({
+          id: `F-rent-coverage-${normalizeName(neighborhood)}`,
+          category: "rent",
+          neighborhood,
+          label: "Rent evidence",
+          value: `${rentSources.length} source${rentSources.length === 1 ? "" : "s"}`,
+          unit: "checked",
+          source: rentSources[0],
+          reliability: strongestReliability(rentSources),
+          detail:
+            "Market/listing sources were found for rental context. Exact rent stays hidden until listing/API values are parsed.",
+        }));
+      }
+    }
+
+    if (!findFact(output, neighborhood, "commute")) {
+      const commuteSources = sourcesForNeighborhood(sources, neighborhood).filter((source) =>
+        ["routing", "official_transit"].includes(source.sourceType) || source.agentId === "commute",
+      );
+      if (commuteSources.length) {
+        output.push(sourceCoverageFact({
+          id: `F-commute-coverage-${normalizeName(neighborhood)}`,
+          category: "commute",
+          neighborhood,
+          label: "Commute evidence",
+          value: "Transit source",
+          unit: "available",
+          source: commuteSources[0],
+          reliability: strongestReliability(commuteSources),
+          detail:
+            "TTC/route data is available for commute research. Exact door-to-door time still needs a routing calculation.",
+        }));
+      }
+    }
+
+    if (!findFact(output, neighborhood, "growth")) {
+      const growthSources = sourcesForNeighborhood(sources, neighborhood).filter((source) =>
+        ["official_development", "market_context"].includes(source.sourceType) || source.agentId === "growth",
+      );
+      if (growthSources.length) {
+        output.push(sourceCoverageFact({
+          id: `F-growth-coverage-${normalizeName(neighborhood)}`,
+          category: "growth",
+          neighborhood,
+          label: "Growth evidence",
+          value: `${growthSources.length} source${growthSources.length === 1 ? "" : "s"}`,
+          unit: "checked",
+          source: growthSources[0],
+          reliability: strongestReliability(growthSources),
+          detail:
+            "Permit/development sources were found for trend context. Numeric rent trend stays hidden until market data is computed.",
+        }));
+      }
+    }
+  }
+
+  return output;
+}
+
+function sourceCoverageFact({ id, category, neighborhood, label, value, unit, source, reliability, detail }) {
+  return {
+    id,
+    sourceId: source.id,
+    category,
+    neighborhood,
+    label,
+    value,
+    unit,
+    detail,
+    reliability,
+    generatedFrom: [source.sourceType],
+  };
+}
+
+function sourcesForNeighborhood(sources, neighborhood) {
+  const target = normalizeName(neighborhood);
+  return sources.filter((source) => {
+    const sourceNeighborhood = normalizeName(source.neighborhood);
+    return (
+      !sourceNeighborhood ||
+      source.neighborhood.includes(",") ||
+      sourceNeighborhood.includes(target) ||
+      target.includes(sourceNeighborhood)
+    );
+  });
+}
+
+function findFact(facts, neighborhood, category) {
+  const target = normalizeName(neighborhood);
+  return facts.find((fact) => {
+    const factNeighborhood = normalizeName(fact.neighborhood);
+    return (
+      fact.category === category &&
+      (factNeighborhood === target ||
+        factNeighborhood.includes(target) ||
+        target.includes(factNeighborhood))
+    );
+  });
+}
+
+function strongestReliability(sources) {
+  if (sources.some((source) => source.reliability === "high")) return "high";
+  if (sources.some((source) => source.reliability === "medium")) return "medium";
+  return "low";
 }
 
 export function configuredSearchProvider(env = process.env) {
@@ -355,6 +503,8 @@ async function runAuthoritativeResearch(localRun, env) {
   const sources = [
     sourceFromDataset("neighbourhoods", targetNeighborhoods),
     sourceFromDataset("crimeRates", targetNeighborhoods),
+    sourceFromDataset("cmhcRentalMarket", targetNeighborhoods),
+    sourceFromDataset("rentalsCaRentReport", targetNeighborhoods),
     sourceFromDataset("activePermits", targetNeighborhoods),
     sourceFromDataset("clearedPermits", targetNeighborhoods),
     sourceFromDataset("ttcGtfs", targetNeighborhoods),

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Check,
@@ -51,6 +51,7 @@ type ResearchTour = {
   runId: number;
   neighborhoodIds: string[];
 };
+type ResearchFact = NonNullable<NonNullable<AgentBackendRun["webResearch"]>["facts"]>[number];
 
 const initialParsed = parsePrompt(defaultPrompt);
 const initialRanked = rankNeighborhoods(initialParsed);
@@ -128,6 +129,15 @@ export default function App() {
 
   const activeLayer = activeLayerFromNav(navMode);
   const showRail = phase === "running" || agentPanelOpen;
+  const tourFocusName = tourFocusId
+    ? ranked.find((neighborhood) => neighborhood.id === tourFocusId)?.name
+    : null;
+  const activeChipLead = phase === "running"
+    ? `Researching ${tourFocusName ?? "Toronto"}`
+    : "Layer";
+  const activeChipDetail = phase === "running"
+    ? `${layerLabels[activeLayer]} evidence`
+    : `${layerLabels[activeLayer]}${activeLayer === "overall" ? " candidates" : ""}`;
 
   const runAgents = () => {
     if (phase === "running") return;
@@ -375,10 +385,10 @@ export default function App() {
         </div>
       </section>
 
-      <div className="active-layer-chip">
+      <div className={`active-layer-chip ${phase === "running" ? "running" : ""}`}>
         <span />
-        Research layer
-        <strong>{layerLabels[activeLayer]}{activeLayer === "overall" ? " candidates" : ""}</strong>
+        <small>{activeChipLead}</small>
+        <strong>{activeChipDetail}</strong>
       </div>
 
       <div className="top-actions">
@@ -413,9 +423,7 @@ export default function App() {
             <div className="loading-stack">
               <span className="loading-line">
                 <i />
-                {tourFocusId
-                  ? `Researching ${ranked.find((neighborhood) => neighborhood.id === tourFocusId)?.name ?? "Toronto"}`
-                  : "Agents analysing Toronto"}
+                Gathering source-backed housing evidence
               </span>
               <span />
               <span />
@@ -607,12 +615,10 @@ function ResultRow({
   const showLayerScore = activeLayer !== "overall";
   const score = layerScore(neighborhood, activeLayer);
   const rentFact = findNeighborhoodFact(webResearch, neighborhood.name, "rent");
-  const hasCommuteEvidence = hasNeighborhoodSource(webResearch, neighborhood.name, [
-    "routing",
-  ]);
+  const commuteFact = findNeighborhoodFact(webResearch, neighborhood.name, "commute");
   const hasCompositeEvidence =
     Boolean(rentFact) &&
-    hasCommuteEvidence &&
+    Boolean(commuteFact) &&
     Boolean(findNeighborhoodFact(webResearch, neighborhood.name, "safety"));
   const tag = hasCompositeEvidence
     ? tagFor(neighborhood)
@@ -633,11 +639,11 @@ function ResultRow({
       <span className="result-meta">
         <small>
           <TrainFront size={13} />
-          {hasCommuteEvidence ? `${neighborhood.comLo}-${neighborhood.comHi} min` : "Route source needed"}
+          {commuteFact ? formatFactValue(commuteFact) : "Commute source needed"}
         </small>
         <small>
           <Home size={13} />
-          {rentFact ? String(rentFact.value) : "Rent source needed"}
+          {rentFact ? formatFactValue(rentFact) : "Rent source needed"}
         </small>
       </span>
       <span className="result-bottom">
@@ -681,9 +687,7 @@ function DetailPanel({
   const fit = consensus(selected.overall);
   const safetyFact = findNeighborhoodFact(webResearch, selected.name, "safety");
   const rentFact = findNeighborhoodFact(webResearch, selected.name, "rent");
-  const hasCommuteEvidence = hasNeighborhoodSource(webResearch, selected.name, [
-    "routing",
-  ]);
+  const commuteFact = findNeighborhoodFact(webResearch, selected.name, "commute");
   const growthFact = findNeighborhoodFact(webResearch, selected.name, "growth");
   const sourcedWhy = [
     safetyFact
@@ -695,13 +699,19 @@ function DetailPanel({
     rentFact
       ? {
           tone: "good" as const,
-          text: `${rentFact.label}: ${rentFact.value} ${rentFact.unit} (${rentFact.sourceId}).`,
+          text: `${rentFact.label}: ${formatFactValue(rentFact)} (${rentFact.sourceId}).`,
+        }
+      : null,
+    commuteFact
+      ? {
+          tone: "good" as const,
+          text: `${commuteFact.label}: ${formatFactValue(commuteFact)} (${commuteFact.sourceId}).`,
         }
       : null,
     growthFact
       ? {
           tone: "good" as const,
-          text: `${growthFact.label}: ${growthFact.value} ${growthFact.unit} (${growthFact.sourceId}).`,
+          text: `${growthFact.label}: ${formatFactValue(growthFact)} (${growthFact.sourceId}).`,
         }
       : null,
   ].filter((item): item is { tone: "good"; text: string } => Boolean(item));
@@ -728,7 +738,7 @@ function DetailPanel({
         )}
       </section>
 
-      <ResearchPanel webResearch={webResearch} />
+      <ResearchPanel webResearch={webResearch} selected={selected} />
 
       <section className="glass-panel detail-panel">
         <div className="detail-head">
@@ -738,7 +748,7 @@ function DetailPanel({
               {sourcedWhy.length ? "Source-backed facts" : "Research pending"}
             </span>
           </div>
-          <TrustBadge sourced={false} />
+          <TrustBadge sourced={Boolean(sourcedWhy.length)} />
         </div>
 
         <h3>Why it works</h3>
@@ -756,26 +766,25 @@ function DetailPanel({
         )}
 
         <div className="detail-split">
-          <span>
-            <small>Typical rent</small>
-            <strong>{rentFact ? String(rentFact.value) : "Source needed"}</strong>
-            <small>{rentFact ? rentFact.unit : "Listings or market report required"}</small>
-          </span>
-          <span>
-            <small>To Union</small>
-            <strong>
-              {hasCommuteEvidence ? `${selected.comLo}-${selected.comHi} min` : "Source needed"}
-            </strong>
-            <small>{hasCommuteEvidence ? selected.comMode : "Routing or GTFS calculation required"}</small>
-          </span>
-        </div>
-
-        <div className="trend-block">
-          <span>
-            <small>Rent trend</small>
-            <strong>{growthFact ? String(growthFact.value) : "Source needed"}</strong>
-          </span>
-          {growthFact ? <Sparkline selected={selected} /> : <DataGap message="Use permits, CMHC/market data, or listing history before showing a trend." />}
+          <EvidenceMetric
+            label={rentFact?.label ?? "Typical rent"}
+            value={rentFact ? formatFactValue(rentFact) : "Needs source"}
+            detail={rentFact?.detail ?? "Listings, CMHC, market report, or listing-history data required."}
+            sourced={Boolean(rentFact)}
+          />
+          <EvidenceMetric
+            label={commuteFact?.label ?? "To Union"}
+            value={commuteFact ? formatFactValue(commuteFact) : "Needs source"}
+            detail={commuteFact?.detail ?? "Routing or GTFS calculation required before showing a commute time."}
+            sourced={Boolean(commuteFact)}
+          />
+          <EvidenceMetric
+            label={growthFact?.label ?? "Rent trend"}
+            value={growthFact ? formatFactValue(growthFact) : "Needs source"}
+            detail={growthFact?.detail ?? "Use permits, CMHC/market data, or listing history before showing a trend."}
+            sourced={Boolean(growthFact)}
+            graphic={growthFact ? <Sparkline selected={selected} /> : null}
+          />
         </div>
 
         <p className="tradeoff">
@@ -801,19 +810,22 @@ function DetailPanel({
 
 function ResearchPanel({
   webResearch,
+  selected,
 }: {
   webResearch: AgentBackendRun["webResearch"] | null;
+  selected: RankedNeighborhood;
 }) {
   if (!webResearch?.enabled || !webResearch.sources.length) return null;
 
   const sources = webResearch.sources.slice(0, 5);
-  const facts = webResearch.facts?.slice(0, 3) ?? [];
+  const facts = factsForNeighborhood(webResearch, selected.name).slice(0, 4);
+  const totalFacts = webResearch.facts?.length ?? 0;
 
   return (
     <section className="glass-panel research-panel">
       <div className="panel-title compact">
         <h2>Research Brief</h2>
-        <span>{webResearch.sources.length} sources · {facts.length} facts</span>
+        <span>{webResearch.sources.length} sources · {totalFacts} facts</span>
       </div>
       <div className="research-meta">
         <span>{webResearch.provider}</span>
@@ -1040,6 +1052,37 @@ function DataGap({ message }: { message: string }) {
   );
 }
 
+function EvidenceMetric({
+  label,
+  value,
+  detail,
+  sourced,
+  graphic,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  sourced: boolean;
+  graphic?: ReactNode;
+}) {
+  return (
+    <article className={`evidence-metric ${sourced ? "sourced" : "pending"}`}>
+      <div>
+        <small>{label}</small>
+        <strong>{value}</strong>
+      </div>
+      <p>{detail}</p>
+      {graphic && <div className="metric-graphic">{graphic}</div>}
+    </article>
+  );
+}
+
+function formatFactValue(fact: ResearchFact) {
+  const rawValue =
+    typeof fact.value === "number" ? fact.value.toLocaleString() : String(fact.value || "");
+  return fact.unit ? `${rawValue} ${fact.unit}` : rawValue;
+}
+
 function TowerLogo() {
   return (
     <svg className="tower-logo heartbeat-logo" viewBox="0 0 96 64">
@@ -1248,6 +1291,29 @@ function findNeighborhoodFact(
       );
     }) ?? null
   );
+}
+
+function factsForNeighborhood(
+  webResearch: AgentBackendRun["webResearch"] | null,
+  neighborhood: string,
+) {
+  if (!webResearch?.enabled || !Array.isArray(webResearch.facts)) return [];
+  const target = normalizeEvidenceName(neighborhood);
+  const order = ["safety", "rent", "commute", "growth", "lifestyle"];
+  return webResearch.facts
+    .filter((fact) => {
+      const factNeighborhood = normalizeEvidenceName(fact.neighborhood);
+      return (
+        factNeighborhood === target ||
+        factNeighborhood.includes(target) ||
+        target.includes(factNeighborhood)
+      );
+    })
+    .sort((a, b) => {
+      const aIndex = order.indexOf(a.category);
+      const bIndex = order.indexOf(b.category);
+      return (aIndex === -1 ? 99 : aIndex) - (bIndex === -1 ? 99 : bIndex);
+    });
 }
 
 function layerHasEvidence(

@@ -360,13 +360,6 @@ export default function MapCanvas({
           <i />
         </div>
       )}
-      {phase === "running" && (
-        <div className="map-research-pill" aria-live="polite">
-          <span />
-          <small>Researching</small>
-          <strong>{tourFocusId ? rankedById.get(tourFocusId)?.name ?? "Toronto" : "Toronto"}</strong>
-        </div>
-      )}
       <div className="map-token-note">
         Mapbox 3D + deck.gl
       </div>
