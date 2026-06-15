@@ -46,47 +46,70 @@ The app then ranks Toronto neighborhoods, animates the map to the areas it is re
 
 ## What It Does
 
-- Shows a real Mapbox GL JS Toronto map with 3D building context and deck.gl overlays.
-- Parses the renter prompt into budget, commute cap, and priority weights.
-- Ranks candidate neighborhoods against those priorities.
-- Spawns category agents:
-  - Affordability
-  - Commute
-  - Safety Signals
-  - Lifestyle
-  - Future Growth
-  - Recommendation
-- Runs contextual web research through a no-key MCP search sidecar.
-- Checks official Toronto sources first, including Toronto Open Data and Toronto Police neighborhood crime-rate data.
-- Uses a source-backed display policy: the UI withholds rents, commute claims, safety claims, and scores unless matching evidence or computed facts exist.
-- Animates a research tour across the top areas so the map zooms to the places being evaluated.
-- Supports Hugging Face Router, NVIDIA NIM, Ollama, and deterministic local fallback.
+- **Plans first.** Before any agent works, the model lays out a task for each City Agent and the source it will use.
+- **Discovers neighbourhoods.** The agentic model picks the Toronto areas that fit the prompt and supplies their coordinates — nothing about the candidate set is hardcoded; the map draws what the model found.
+- **Scores all eight dimensions** — Affordability, Safety, Commute, Transit, Amenities, Lifestyle, Growth, and an overall Match — for every candidate, each computed from a real, named, no-key source.
+- **Fans out a researcher per City Agent.** Affordability, Commute, Safety, Lifestyle and Growth agents each reason over only their own evidence; a **Recommendation agent runs last** with every agent's finding *and* all of their sources.
+- **Fails closed.** The UI withholds a rent, commute, safety, growth claim, or score unless the backend can tie it to source evidence — sources are named, never "S1".
+- **Shows a real Mapbox GL JS 3D map** with a research tour that zooms into each area while it is being researched, then flies out-and-in to the next.
+- **Two-tier brains, all < 32B.** NVIDIA Nemotron Nano Omni Reasoning is the main model (with `enable_thinking`); the small OpenBMB model on llama.cpp assists with summarisation. Falls back to HF when a provider is unavailable.
 
 ## Architecture
 
 ```mermaid
-flowchart TD
-  User["Renter prompt"] --> UI["React + Vite app"]
-  UI --> Map["Mapbox GL JS + deck.gl map"]
-  UI --> Gradio["Gradio Server\ncustom routes + API endpoint"]
-  Gradio --> API["Node agent backend"]
+flowchart TB
+  subgraph FE["Frontend · React 19 + Vite"]
+    Prompt["Renter prompt<br/>budget · commute · safety · vibe"]
+    MapUI["Mapbox GL JS + deck.gl<br/>3D map · research tour"]
+    Panels["Agent cards · 8-dimension scores<br/>research brief · compare · listings"]
+  end
 
-  API --> Parser["Intent parser\nbudget, commute cap, weights"]
-  Parser --> Ranker["Neighborhood ranker\n14 Toronto candidate areas"]
-  Ranker --> Agents["Agent planner\nAffordability, Commute, Safety,\nLifestyle, Growth, Recommendation"]
+  subgraph Space["Hugging Face Space · Docker"]
+    Gradio["gradio.Server (FastAPI)<br/>serves the React UI + /run_agent MCP tool"]
+    API["Node agent backend<br/>POST /api/agent/run"]
+  end
 
-  Agents --> Official["Authoritative data tools\nToronto Open Data, Police crime rates,\npermits, TTC references, StatCan"]
-  Agents --> MCP["Open-WebSearch MCP sidecar\nDuckDuckGo HTML + Bing RSS\nno API key required"]
-  MCP --> Filter["Backend domain filter\nkeeps only allowed source domains"]
-  Official --> Evidence["Evidence bundle\nsources, facts, limitations"]
-  Filter --> Evidence
+  Prompt --> Gradio --> API
 
-  Evidence --> Policy["Evidence policy\nfail closed for unsupported claims"]
-  Policy --> Model["Small model synthesis\nHF Router / NVIDIA / Ollama"]
-  Model --> API
-  API --> Gradio
-  Gradio --> UI
-  UI --> Panels["Map, agent cards,\nresearch brief, comparison"]
+  subgraph Pipeline["Agentic pipeline · every step is traced"]
+    direction TB
+    Plan["1 · Plan<br/>intent + a task per City Agent"]
+    Discover["2 · Discover neighbourhoods<br/>model picks Toronto areas + coordinates<br/>(nothing hardcoded)"]
+    Research["3 · Gather official evidence"]
+    Score["4 · Score 8 dimensions<br/>from named sources"]
+    Fanout["5 · City Agent fan-out<br/>each researches its own dimension"]
+    Recommend["6 · Recommendation agent<br/>weighs every agent + all their sources"]
+    Policy["7 · Evidence policy<br/>fail-closed: no source, no claim"]
+    Plan --> Discover --> Research --> Score --> Fanout --> Recommend --> Policy
+  end
+
+  API --> Plan
+  Policy --> API --> Gradio --> Panels
+  Discover -. coordinates .-> MapUI
+
+  subgraph Sources["No-key data sources"]
+    Police["Toronto Police Service<br/>crime rates → Safety"]
+    OSM["OpenStreetMap (Overpass)<br/>cafes · parks · transit · builds<br/>→ Amenities / Lifestyle / Transit / Growth"]
+    Transit["TTC + GO / distance to Union<br/>→ Commute"]
+    CMHC["CMHC + density model<br/>→ Affordability"]
+    OpenData["Toronto Open Data + StatCan<br/>permits · GTFS · census"]
+    Wiki["Wikipedia REST<br/>→ coordinates"]
+  end
+  Research --- OpenData
+  Research --- Wiki
+  Score --- Police
+  Score --- OSM
+  Score --- Transit
+  Score --- CMHC
+
+  subgraph Models["Two-tier brains · all under 32B"]
+    Main["Main: NVIDIA Nemotron Nano Omni Reasoning<br/>temp 0.6 · enable_thinking · reasoning_budget<br/>↳ fallback: HF Qwen3-Coder"]
+    Assist["Assistant: OpenBMB MiniCPM via llama.cpp<br/>summarises each agent's evidence"]
+  end
+  Discover --- Main
+  Fanout --- Assist
+  Fanout --- Main
+  Recommend --- Main
 ```
 
 ## Tech Stack
@@ -96,12 +119,12 @@ flowchart TD
 - UI: custom CSS, lucide-react icons, map-matched monochrome palette
 - Backend: Node HTTP server
 - Space wrapper: `gradio.Server` on FastAPI, Docker Space
-- Agent orchestration: local tool trace plus model synthesis
-- Web research: bundled MCP-compatible no-key search server
-- Models:
-  - Primary hackathon model: `nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16`
-  - Optional HF Router fallback: `Qwen/Qwen3-Coder-30B-A3B-Instruct`
-  - Optional local path: Ollama OpenAI-compatible endpoint
+- Agent orchestration: plan → discover → research → score → fan-out → recommend, fully traced
+- Data: Toronto Open Data, Toronto Police, OpenStreetMap (Overpass), CMHC, StatCan, Wikipedia — all no-key
+- Models (all < 32B):
+  - Main agentic brain: `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` (build.nvidia.com)
+  - Summarisation assistant: OpenBMB MiniCPM via llama.cpp (`openbmb/MiniCPM4-*-GGUF`)
+  - Fallback: `Qwen/Qwen3-Coder-30B-A3B-Instruct` on the HF Router
 
 ## Build Small Hackathon Readiness
 
@@ -129,21 +152,14 @@ Suggested target categories:
 
 ## Runtime Flow
 
-1. The user writes a housing prompt in the Ask 6ixPulse composer.
-2. The frontend calls `POST /api/agent/run`.
-3. The backend parses intent and ranks local Toronto candidate neighborhoods.
-4. The research planner creates contextual, agent-specific searches:
-   - affordability: listings, average rent, rent market
-   - commute: TTC and commute-to-destination context
-   - safety: official crime/safety and resident discussion
-   - lifestyle: cafes, groceries, parks, restaurants, reviews
-   - growth: development, permits, planning, market trend
-   - recommendation: pros/cons and neighborhood guides
-5. Official data and MCP web-search results are normalized into sources and facts.
-6. Domain filters remove polluted search results that do not match the intended source set.
-7. The evidence policy hides unsupported user-facing claims.
-8. The selected small model synthesizes strict JSON for recommendations.
-9. The map and agent panels update from the same structured result.
+1. The user writes a housing prompt in the Ask 6ixPulse composer; the frontend calls `POST /api/agent/run`.
+2. **Plan** — the model parses intent (budget, commute cap, priority weights) and lays out a task for each City Agent.
+3. **Discover** — the model names the Toronto neighbourhoods that fit and supplies their coordinates. No candidate list is hardcoded; the map renders what the model returns.
+4. **Gather evidence** — official Toronto data is pulled per area: Toronto Police crime rates, building permits, TTC GTFS, StatCan, and Wikipedia coordinates.
+5. **Score** — for every candidate, all eight dimensions are computed from named sources (see below) and a weighted Match.
+6. **Fan-out** — each City Agent reasons over only its dimension's evidence; the **Recommendation agent runs last** with every finding and all sources, using the reasoning model's thinking mode.
+7. **Evidence policy** — any claim without a matched source or computed fact is hidden ("needs source").
+8. The map, agent cards, 8-dimension scores, research brief, and comparison update from the same structured, source-cited result.
 
 ## Source-Backed Display Policy
 
@@ -153,73 +169,46 @@ Local neighborhood rows seed the workflow, but they are not treated as truth. Th
 
 This matters because housing decisions are high-stakes. A pretty map with fake confidence is worse than a map that admits where research is incomplete.
 
-## Web Research
+## Data Sources & Scoring
 
-The default search provider is:
+Every dimension shown in the UI is computed from a real, no-key source and labelled with that source's name (never "S1"):
 
-```bash
-SEARCH_PROVIDER=mcp_open_websearch
-MCP_WEB_SEARCH_ENABLED=1
-MCP_WEB_SEARCH_TIMEOUT_MS=6000
-MCP_WEB_SEARCH_TOOL=web_search
-RESEARCH_DEPTH=standard
-RESEARCH_MAX_QUERIES=6
-RESEARCH_RESULTS_PER_QUERY=3
-RESEARCH_TOTAL_TIMEOUT_MS=45000
-```
+| Dimension | Source |
+| --- | --- |
+| Safety | **Toronto Police Service** — Neighbourhood Crime Rates (Toronto Open Data) |
+| Commute | **Distance to Union Station** over the TTC + GO (Metrolinx) network |
+| Transit | **TTC** stops & stations via **OpenStreetMap** |
+| Amenities · Lifestyle · Growth | **OpenStreetMap (Overpass)** — cafés, restaurants, parks, groceries, construction sites |
+| Affordability | **CMHC** rental-market context + a distance-to-core / density model |
+| Match | weighted blend of the above, against the renter's stated priorities |
+| Coordinates | **Wikipedia REST** (for placing discovered areas on the map) |
 
-The bundled sidecar lives at:
-
-```text
-server/open-websearch-mcp.mjs
-```
-
-It exposes a `web_search` MCP tool and searches public DuckDuckGo HTML plus Bing RSS without an API key. Public search can still be rate-limited or incomplete, so the backend applies domain filtering and keeps limitations in the research payload.
-
-The hosted Space uses bounded search defaults so public no-key search does not block the agent response. For slower, deeper research runs, increase `RESEARCH_MAX_QUERIES`, `RESEARCH_TOTAL_TIMEOUT_MS`, and `MCP_WEB_SEARCH_TIMEOUT_MS`, or switch to an API-backed provider.
-
-Optional API providers remain supported:
-
-```bash
-SEARCH_PROVIDER=google
-GOOGLE_SEARCH_API_KEY=your_google_search_key
-GOOGLE_SEARCH_CX=your_google_programmable_search_engine_id
-SERPAPI_API_KEY=your_serpapi_key
-BRAVE_SEARCH_API_KEY=your_brave_key
-TAVILY_API_KEY=your_tavily_key
-```
+These are all official public APIs, so the hosted Space runs **without any scraping or bypass tooling**. Optional keyed web search (Google CSE, SerpAPI, Brave, Tavily) can be enabled for extra context, but it is off by default and never required.
 
 ## Models
 
-Primary NVIDIA config:
+Two tiers, both under 32B parameters:
 
 ```bash
-AGENT_MODEL_PROVIDER=nvidia
-NVIDIA_API_KEY=your_nvidia_api_key
-NVIDIA_MODEL=nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16
+# Main agentic brain: NVIDIA Nemotron Nano Omni Reasoning (build.nvidia.com).
+# Used for discovery, the per-agent findings, and the final recommendation (with thinking).
+AGENT_MODEL_PROVIDER=auto              # tries Nemotron first, then HF
+NVIDIA_API_KEY=your_nvapi_key
+NVIDIA_MODEL=nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
 NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1
-NVIDIA_ENABLE_THINKING=1
-```
+NVIDIA_ENABLE_THINKING=1              # temperature 0.6, top_p 0.95, reasoning_budget
 
-Optional Hugging Face Router fallback:
+# Summarisation assistant: small OpenBMB model through the llama.cpp runtime.
+LLAMACPP_ENABLED=1
+LLAMACPP_MODEL=openbmb/MiniCPM4-0.5B  # or MiniCPM4-8B-GGUF for stronger summaries
+AGENT_SUMMARIZER_PROVIDER=llamacpp
 
-```bash
-AGENT_MODEL_PROVIDER=hf
+# Fallback when no key/runtime is available, so the app always responds.
 HF_TOKEN=your_hugging_face_token
 HF_MODEL=Qwen/Qwen3-Coder-30B-A3B-Instruct
-HF_CHAT_COMPLETIONS_URL=https://router.huggingface.co/v1/chat/completions
-HF_REASONING_EFFORT=medium
 ```
 
-Optional local Ollama config:
-
-```bash
-AGENT_MODEL_PROVIDER=ollama
-OLLAMA_MODEL=qwen3:8b
-OLLAMA_HOST=http://127.0.0.1:11434
-```
-
-If a token, model, or provider is unavailable, the API returns a deterministic local result so the UI remains usable.
+The reasoning model uses the Nemotron recipe (matching `ChatNVIDIA`): `temperature=0.6`, `top_p=0.95`, `chat_template_kwargs={"enable_thinking": true}`, and a `reasoning_budget`; its `<think>` reasoning is captured separately from the JSON answer. Thinking is enabled only for the decisions (discovery, recommendation, synthesis), and the per-agent fan-out runs in parallel on hosted APIs, so a full run stays within the response budget.
 
 ## Gradio Space
 
@@ -254,20 +243,17 @@ NVIDIA_API_KEY=your_nvidia_api_key
 
 Local secrets are intentionally not committed or uploaded. Add these in the Space settings before final judging.
 
-Recommended Space variables:
+Recommended Space variables (the Docker image already sets these):
 
 ```bash
-AGENT_MODEL_PROVIDER=nvidia
-NVIDIA_MODEL=nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16
+AGENT_MODEL_PROVIDER=auto
+NVIDIA_MODEL=nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
 NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1
 NVIDIA_ENABLE_THINKING=1
-SEARCH_PROVIDER=mcp_open_websearch
-MCP_WEB_SEARCH_ENABLED=1
-MCP_WEB_SEARCH_TIMEOUT_MS=6000
-RESEARCH_DEPTH=standard
-RESEARCH_MAX_QUERIES=6
-RESEARCH_RESULTS_PER_QUERY=3
-RESEARCH_TOTAL_TIMEOUT_MS=45000
+AGENT_DISCOVER=1
+AGENT_FANOUT=1
+SEARCH_PROVIDER=disabled        # official-data-only; no scraping on the hosted Space
+OFFICIAL_DATA_ENABLED=1
 ```
 
 Local Space-style run:
@@ -325,21 +311,23 @@ curl http://127.0.0.1:8787/api/agent/search/health
 ## Project Structure
 
 ```text
-app.py                         Gradio Server wrapper for Space runtime
+app.py                         Gradio Server wrapper for the Space runtime
 Dockerfile                     Docker Space image with Node + Python
-src/App.tsx                    main app shell and agent panels
-src/components/MapCanvas.tsx   Mapbox/deck.gl map experience
-src/data/neighborhoods.ts      Toronto candidate seed data
-src/lib/scoring.ts             prompt parsing and local ranking
+src/App.tsx                    app shell, agent panels, scores, listings
+src/components/MapCanvas.tsx   Mapbox/deck.gl map + research tour
 src/lib/agentApi.ts            frontend API client types
-server/index.mjs               local agent API server
-server/agent-core.mjs          local tool loop, trace, evidence policy
-server/research-tools.mjs      official data + web research planner
-server/open-websearch-mcp.mjs  no-key MCP web-search sidecar
-server/hf-client.mjs           Hugging Face Router client
-server/nvidia-client.mjs       NVIDIA NIM client
-server/ollama-client.mjs       Ollama client
+server/index.mjs               agent API server; orchestrates the pipeline
+server/discover.mjs            model-driven neighbourhood discovery (+ coordinates)
+server/score-tools.mjs         8-dimension scoring from named no-key sources
+server/agent-fanout.mjs        per-agent City Agents + Recommendation agent
+server/model-chat.mjs          provider routing: main brain vs. summariser
+server/agent-core.mjs          plan, trace, and the fail-closed evidence policy
+server/research-tools.mjs      Toronto Open Data + crime rates + coordinates
+server/nvidia-client.mjs       NVIDIA Nemotron (reasoning) client
+server/llamacpp-client.mjs     llama.cpp / OpenBMB client
+server/hf-client.mjs           Hugging Face Router fallback client
 scripts/dev-full.mjs           starts frontend and backend together
+scripts/llama-server.sh        launches a local OpenBMB GGUF via llama.cpp
 ```
 
 ## Verification
