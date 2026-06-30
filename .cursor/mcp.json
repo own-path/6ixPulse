@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "xapi": {
+      "command": "npx",
+      "args": ["-y", "@xdevplatform/xurl", "mcp", "https://api.x.com/mcp"],
+      "envFile": "${workspaceFolder}/.env",
+      "env": {
+        "CLIENT_ID": "${env:X_CLIENT_ID}",
+        "CLIENT_SECRET": "${env:X_CLIENT_SECRET}"
+      }
+    },
+    "x-docs": {
+      "url": "https://docs.x.com/mcp"
+    }
+  }
+}
