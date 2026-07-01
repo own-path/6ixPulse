@@ -15,6 +15,13 @@ import {
   runHousingResearch,
   searchProviderStatus,
 } from "./research-tools.mjs";
+import {
+  handleTravelHealth,
+  handleTravelRun,
+  handleTravelQuote,
+  handleConfirmToken,
+  handleTravelConfirm,
+} from "./travel/index.mjs";
 
 const envPath = resolve(process.cwd(), ".env");
 loadDotEnv(envPath);
@@ -73,6 +80,39 @@ const server = createServer(async (request, response) => {
     if (request.method === "GET" && url.pathname === "/api/agent/search/google") {
       const probe = await runGoogleSearchProbe(url.searchParams.get("q") || "");
       writeJson(response, probe.ok ? 200 : 409, probe);
+      return;
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/travel/health") {
+      writeJson(response, 200, await handleTravelHealth());
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/travel/run") {
+      const body = await readJson(request);
+      const result = await handleTravelRun(body);
+      writeJson(response, result.ok === false && !result.trace ? 400 : 200, result);
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/travel/quote") {
+      const body = await readJson(request);
+      const result = await handleTravelQuote(body);
+      writeJson(response, result.ok ? 200 : 400, result);
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/travel/confirm-token") {
+      const body = await readJson(request);
+      const result = await handleConfirmToken(body);
+      writeJson(response, result.ok ? 200 : 400, result);
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/travel/confirm") {
+      const body = await readJson(request);
+      const result = await handleTravelConfirm(body);
+      writeJson(response, 200, result);
       return;
     }
 

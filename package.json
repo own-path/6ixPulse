@@ -11,6 +11,8 @@
     "llama:serve": "bash scripts/llama-server.sh",
     "trace:share": "node scripts/share-trace.mjs",
     "check:google-search": "node scripts/check-google-search.mjs",
+    "travel:probe": "node scripts/travel-probe.mjs",
+    "travel:test": "node scripts/travel-test.mjs",
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {
