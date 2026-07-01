@@ -171,6 +171,43 @@ async def agent_run(request: Request) -> Response:
     return Response(content=raw, status_code=status, media_type=content_type)
 
 
+@app.get("/api/travel/health")
+async def travel_health() -> Response:
+    status, raw, content_type = request_node("GET", "/api/travel/health")
+    return Response(content=raw, status_code=status, media_type=content_type)
+
+
+@app.post("/api/travel/run")
+async def travel_run(request: Request) -> Response:
+    status, raw, content_type = request_node("POST", "/api/travel/run", await request.body())
+    return Response(content=raw, status_code=status, media_type=content_type)
+
+
+@app.post("/api/travel/quote")
+async def travel_quote(request: Request) -> Response:
+    status, raw, content_type = request_node("POST", "/api/travel/quote", await request.body())
+    return Response(content=raw, status_code=status, media_type=content_type)
+
+
+@app.post("/api/travel/confirm-token")
+async def travel_confirm_token(request: Request) -> Response:
+    status, raw, content_type = request_node("POST", "/api/travel/confirm-token", await request.body())
+    return Response(content=raw, status_code=status, media_type=content_type)
+
+
+@app.post("/api/travel/confirm")
+async def travel_confirm(request: Request) -> Response:
+    status, raw, content_type = request_node("POST", "/api/travel/confirm", await request.body())
+    return Response(content=raw, status_code=status, media_type=content_type)
+
+
+@app.mcp.tool(name="search_travel")
+@app.api(name="search_travel", concurrency_limit=2)
+def search_travel(prompt: str) -> dict[str, Any]:
+    """Run the Meridian travel agent to search hotels, flights, activities, and restaurants."""
+    return node_json("POST", "/api/travel/run", {"prompt": prompt})
+
+
 @app.mcp.tool(name="run_agent")
 @app.api(name="run_agent", concurrency_limit=2)
 def run_agent(prompt: str) -> dict[str, Any]:

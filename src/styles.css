@@ -1878,3 +1878,346 @@ textarea:focus-visible {
     flex-direction: column;
   }
 }
+
+/* Meridian product switcher + travel mode */
+.meridian-shell {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.product-switcher {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  margin: 8px 12px 0;
+  border-radius: 14px;
+  z-index: 30;
+  flex-shrink: 0;
+}
+
+.product-switcher button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.product-switcher button.active {
+  background: var(--panel-bg-strong);
+  color: var(--text-strong);
+  box-shadow: var(--panel-shadow-soft);
+}
+
+.meridian-shell > .app-shell {
+  flex: 1;
+  min-height: 0;
+}
+
+.travel-app {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: 0 12px 12px;
+  gap: 12px;
+}
+
+.travel-header {
+  padding: 16px 18px;
+  border-radius: 16px;
+}
+
+.travel-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.travel-brand h1 {
+  margin: 0;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 1.15rem;
+  color: var(--text-strong);
+}
+
+.travel-brand p {
+  margin: 4px 0 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.travel-main {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px 2px;
+}
+
+.travel-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.travel-message {
+  max-width: 720px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+}
+
+.travel-message-user {
+  align-self: flex-end;
+  background: var(--panel-bg-strong);
+}
+
+.travel-message-label {
+  display: block;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-soft);
+  margin-bottom: 6px;
+}
+
+.travel-message p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.travel-running {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.travel-offer-group h2,
+.travel-quote-group h2 {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+  color: var(--text-strong);
+}
+
+.travel-offer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.travel-offer-card,
+.travel-quote-card {
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--panel-bg-strong);
+  border: 1px solid var(--panel-border);
+  box-shadow: var(--panel-shadow-soft);
+}
+
+.travel-offer-header,
+.travel-quote-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.travel-vertical-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--panel-bg-soft);
+  color: var(--map-700);
+}
+
+.travel-rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: var(--map-700);
+}
+
+.travel-offer-card h3,
+.travel-quote-card h3 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+  color: var(--text-strong);
+}
+
+.travel-offer-meta {
+  margin: 0 0 12px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.travel-offer-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.travel-offer-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-end;
+}
+
+.travel-affiliate-cta,
+.travel-affiliate-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--map-700);
+  text-decoration: none;
+}
+
+.travel-affiliate-cta:hover,
+.travel-affiliate-link:hover {
+  text-decoration: underline;
+}
+
+.travel-quote-lines {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+}
+
+.travel-quote-lines li {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 0.88rem;
+  color: var(--text);
+}
+
+.travel-quote-total {
+  display: flex;
+  justify-content: space-between;
+  padding-top: 8px;
+  border-top: 1px solid var(--panel-border);
+  margin-bottom: 12px;
+}
+
+.travel-quote-expiry {
+  font-size: 0.75rem;
+  color: var(--text-soft);
+}
+
+.travel-confirm-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.travel-confirm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--map-700);
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.travel-confirm-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.travel-confirm-message {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--map-600);
+}
+
+.travel-confirm-error {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #b42318;
+}
+
+.travel-composer {
+  padding: 12px;
+  border-radius: 16px;
+  flex-shrink: 0;
+}
+
+.travel-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.travel-chips button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--panel-bg-soft);
+  color: var(--text);
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.travel-composer-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.travel-composer-row textarea {
+  flex: 1;
+  resize: none;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+  background: white;
+  color: var(--text-strong);
+}
+
+.travel-send {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--map-700);
+  color: white;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.travel-send:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

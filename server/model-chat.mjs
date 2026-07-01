@@ -139,3 +139,169 @@ export async function agenticChat(messages, env = process.env, opts = {}) {
     return null;
   }
 }
+
+function parseToolCalls(message) {
+  if (!message) return [];
+  if (Array.isArray(message.tool_calls) && message.tool_calls.length) {
+    return message.tool_calls.map((call) => ({
+      id: call.id,
+      name: call.function?.name,
+      arguments: call.function?.arguments || "{}",
+    }));
+  }
+  const blocks = Array.isArray(message.content) ? message.content : [];
+  return blocks
+    .filter((block) => block?.type === "tool_use")
+    .map((block) => ({
+      id: block.id,
+      name: block.name,
+      arguments: typeof block.input === "string" ? block.input : JSON.stringify(block.input || {}),
+    }));
+}
+
+function messageHasText(message) {
+  if (!message) return false;
+  if (typeof message.content === "string" && message.content.trim()) return true;
+  if (Array.isArray(message.content)) {
+    return message.content.some(
+      (block) => block?.type === "text" && typeof block.text === "string" && block.text.trim(),
+    );
+  }
+  return false;
+}
+
+function extractTextContent(message) {
+  if (!message) return "";
+  if (typeof message.content === "string") return stripReasoning(message.content);
+  if (Array.isArray(message.content)) {
+    const text = message.content
+      .filter((block) => block?.type === "text")
+      .map((block) => block.text || "")
+      .join("\n")
+      .trim();
+    return stripReasoning(text);
+  }
+  return "";
+}
+
+// Multi-turn tool-calling loop for travel agent. Returns final assistant text plus trace.
+export async function agenticChatWithTools(messages, tools, env = process.env, opts = {}) {
+  const provider = opts.provider || resolveMainProvider(env);
+  if (!provider) return null;
+  const ep = endpointFor(provider, env);
+  if (!ep.url) return null;
+
+  const maxRounds = Number(opts.maxRounds ?? env.TRAVEL_MAX_TOOL_ROUNDS ?? 8);
+  const conversation = [...messages];
+  const trace = [];
+  const collectedOffers = [];
+  const collectedQuotes = [];
+
+  for (let round = 0; round < maxRounds; round += 1) {
+    const payload = {
+      model: ep.model,
+      messages: conversation,
+      tools,
+      tool_choice: "auto",
+      temperature: Number(opts.temperature ?? (provider === "nvidia" ? 0.4 : 0.2)),
+      max_tokens: Number(opts.maxTokens ?? 1024),
+      stream: false,
+    };
+    if (provider === "nvidia") {
+      payload.top_p = Number(env.NVIDIA_TOP_P ?? 0.95);
+      payload.chat_template_kwargs = { enable_thinking: false };
+    }
+
+    let data;
+    try {
+      const response = await fetch(ep.url, {
+        method: "POST",
+        headers: {
+          ...(ep.auth ? { Authorization: `Bearer ${ep.auth}` } : {}),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(Number(opts.timeoutMs ?? env.TRAVEL_CHAT_TIMEOUT_MS ?? 90000)),
+      });
+      if (!response.ok) {
+        return { provider, model: ep.model, error: `HTTP ${response.status}`, trace, offers: collectedOffers, quotes: collectedQuotes };
+      }
+      data = await response.json();
+    } catch (error) {
+      return {
+        provider,
+        model: ep.model,
+        error: error instanceof Error ? error.message : "request_failed",
+        trace,
+        offers: collectedOffers,
+        quotes: collectedQuotes,
+      };
+    }
+
+    const message = data?.choices?.[0]?.message;
+    const toolCalls = parseToolCalls(message);
+
+    if (!toolCalls.length) {
+      const text = extractTextContent(message);
+      if (text || round === 0) {
+        return {
+          provider,
+          model: ep.model,
+          content: text || "I could not complete that travel search. Please try again.",
+          trace,
+          offers: collectedOffers,
+          quotes: collectedQuotes,
+        };
+      }
+      break;
+    }
+
+    conversation.push(message);
+
+    for (const call of toolCalls) {
+      let parsedInput = {};
+      try {
+        parsedInput = JSON.parse(call.arguments || "{}");
+      } catch {
+        parsedInput = {};
+      }
+
+      const toolResult = opts.onToolCall
+        ? await opts.onToolCall(call.name, parsedInput, call.id)
+        : { ok: false, message: "No tool executor configured" };
+
+      trace.push({
+        id: call.id || `tool_${trace.length + 1}`,
+        tool: call.name,
+        status: toolResult.ok ? "done" : "error",
+        input: parsedInput,
+        output: toolResult.result || { error: toolResult.message || toolResult.error },
+      });
+
+      if (toolResult.result?.offers) collectedOffers.push(...toolResult.result.offers);
+      if (toolResult.result?.quote) collectedQuotes.push(toolResult.result.quote);
+
+      conversation.push({
+        role: "tool",
+        tool_call_id: call.id,
+        content: JSON.stringify(toolResult.result || { error: toolResult.message || toolResult.error }),
+      });
+    }
+
+    if (messageHasText(message)) {
+      const text = extractTextContent(message);
+      if (text) {
+        return { provider, model: ep.model, content: text, trace, offers: collectedOffers, quotes: collectedQuotes };
+      }
+    }
+  }
+
+  return {
+    provider,
+    model: ep.model,
+    content: "I reached the tool limit for this request. Here is what I found so far — ask me to narrow down or continue.",
+    trace,
+    offers: collectedOffers,
+    quotes: collectedQuotes,
+  };
+}
