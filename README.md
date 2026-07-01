@@ -249,14 +249,14 @@ What it does:
 - proxies the existing frontend calls to `/api/agent/run`
 - exposes a Gradio API endpoint and MCP tool named `/run_agent`
 
-Required Space secrets:
+Required Space secrets (add in the Space **Settings → Secrets** panel — separate from local `.env`):
 
 ```bash
 VITE_MAPBOX_TOKEN=your_mapbox_token
 NVIDIA_API_KEY=your_nvidia_api_key
 ```
 
-Local secrets are intentionally not committed or uploaded. Add these in the Space settings before final judging.
+Local `.env` is intentionally not committed or uploaded. For local development, put the same keys in the project `.env` file instead (see [Environment Variables & API Keys](#environment-variables--api-keys)).
 
 Recommended Space variables (the Docker image already sets these):
 
@@ -288,11 +288,49 @@ Open:
 http://127.0.0.1:7860/
 ```
 
+## Environment Variables & API Keys
+
+Keys are read from the project `.env` file in the repo root (copy from `.env.example`). They are **not** loaded from Hugging Face Space secrets, Cursor agent secrets, or shell exports unless you also write them into `.env`.
+
+| Variable | Required for | Where it is read |
+| --- | --- | --- |
+| `VITE_MAPBOX_TOKEN` | Map | `.env` (frontend via `/api/config` in dev, or Vite at startup) |
+| `NVIDIA_API_KEY` | Nemotron agent runs | `.env` (backend reloads on each request) |
+| `HF_TOKEN` | HF Router fallback | `.env` (backend reloads on each request) |
+
+**Hosted Space vs local dev:** Space secrets live in the Hugging Face Space settings and are injected by `app.py`. Local `npm run dev:full` only sees the `.env` file in this workspace. If you added keys in Space settings or Cursor secrets, copy them into `.env` here.
+
+**Mapbox in dev:** Vite normally bakes `VITE_*` variables in at startup. In dev, the map also calls `GET /api/config` so a token added to `.env` is picked up without restarting Vite. You can use `VITE_MAPBOX_TOKEN` or `MAPBOX_TOKEN`.
+
+**Agent keys:** `NVIDIA_API_KEY` (from [build.nvidia.com](https://build.nvidia.com)) or `HF_TOKEN` (Hugging Face) power discovery, fan-out, and recommendation. Without either, the app still responds using the local fallback scorer.
+
+Verify configuration:
+
+```bash
+curl http://127.0.0.1:8787/api/config
+curl http://127.0.0.1:8787/api/agent/health
+```
+
+`nvidiaConfigured: true` or `hfConfigured: true` means an agent key is loaded. An empty `mapboxToken` in `/api/config` means the map overlay will not render.
+
 ## Running Locally
 
 ```bash
 npm install
 cp .env.example .env
+```
+
+Edit `.env` and set at least:
+
+```bash
+VITE_MAPBOX_TOKEN=your_mapbox_token_here
+NVIDIA_API_KEY=your_nvapi_key_here          # or HF_TOKEN=your_hf_token_here
+VITE_MAPBOX_STYLE_URL=mapbox://styles/ownpath/cmqe4wg8h005001s4bjx9461m
+```
+
+Start frontend + backend together:
+
+```bash
 npm run dev:full
 ```
 
@@ -302,23 +340,17 @@ Open:
 http://127.0.0.1:5173/
 ```
 
-Set your Mapbox token before running:
-
-```bash
-VITE_MAPBOX_TOKEN=your_token_here
-VITE_MAPBOX_STYLE_URL=mapbox://styles/ownpath/cmqe4wg8h005001s4bjx9461m
-```
-
 Run services separately:
 
 ```bash
-npm run dev:api
-npm run dev
+npm run dev:api   # Node agent backend on :8787
+npm run dev       # Vite frontend on :5173
 ```
 
 Health checks:
 
 ```bash
+curl http://127.0.0.1:8787/api/config
 curl http://127.0.0.1:8787/api/agent/health
 curl http://127.0.0.1:8787/api/agent/search/health
 ```
@@ -332,7 +364,7 @@ src/App.tsx                    app shell, agent panels, scores, listings
 src/components/MapCanvas.tsx   Mapbox/deck.gl map + research tour
 src/lib/agentApi.ts            frontend API client types
 src/lib/tts.ts                 Kokoro-82M in-browser narration
-server/index.mjs               agent API server; orchestrates the pipeline
+server/index.mjs               agent API server; orchestrates the pipeline + /api/config
 server/discover.mjs            model-driven neighbourhood discovery (+ coordinates)
 server/score-tools.mjs         8-dimension scoring from named no-key sources
 server/agent-fanout.mjs        per-agent City Agents + Recommendation agent
