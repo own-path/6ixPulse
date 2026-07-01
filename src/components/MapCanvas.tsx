@@ -16,14 +16,19 @@ declare global {
   }
 }
 
-const runtimeConfig = typeof window !== "undefined" ? window.__SIXPULSE_CONFIG__ : undefined;
-const mapboxToken =
-  runtimeConfig?.mapboxToken || (import.meta.env.VITE_MAPBOX_TOKEN as string | undefined);
-const mapboxStyleUrl =
-  runtimeConfig?.mapboxStyleUrl ||
-  (import.meta.env.VITE_MAPBOX_STYLE_URL as string | undefined) ||
-  "mapbox://styles/ownpath/cmqe4wg8h005001s4bjx9461m";
-const hasMapboxToken = Boolean(mapboxToken?.trim());
+const DEFAULT_MAPBOX_STYLE = "mapbox://styles/ownpath/cmqe4wg8h005001s4bjx9461m";
+
+function readStaticMapboxConfig() {
+  const runtimeConfig = typeof window !== "undefined" ? window.__SIXPULSE_CONFIG__ : undefined;
+  return {
+    mapboxToken:
+      runtimeConfig?.mapboxToken || (import.meta.env.VITE_MAPBOX_TOKEN as string | undefined),
+    mapboxStyleUrl:
+      runtimeConfig?.mapboxStyleUrl ||
+      (import.meta.env.VITE_MAPBOX_STYLE_URL as string | undefined) ||
+      DEFAULT_MAPBOX_STYLE,
+  };
+}
 const basemapConfig = {
   theme: "monochrome",
   lightPreset: "dawn",
@@ -96,6 +101,36 @@ export default function MapCanvas({
   const tourActiveRef = useRef(false);
   const onTourStepRef = useRef(onTourStep);
   const [pitched, setPitched] = useState(true);
+  const [mapboxConfig, setMapboxConfig] = useState(readStaticMapboxConfig);
+  const mapboxToken = mapboxConfig.mapboxToken;
+  const mapboxStyleUrl = mapboxConfig.mapboxStyleUrl;
+  const hasMapboxToken = Boolean(mapboxToken?.trim());
+
+  useEffect(() => {
+    if (hasMapboxToken) return;
+    let cancelled = false;
+
+    fetch("/api/config")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((config) => {
+        if (cancelled || !config) return;
+        const nextToken =
+          typeof config.mapboxToken === "string" ? config.mapboxToken.trim() : "";
+        if (!nextToken) return;
+        setMapboxConfig({
+          mapboxToken: nextToken,
+          mapboxStyleUrl:
+            typeof config.mapboxStyleUrl === "string" && config.mapboxStyleUrl.trim()
+              ? config.mapboxStyleUrl
+              : DEFAULT_MAPBOX_STYLE,
+        });
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasMapboxToken]);
 
   useEffect(() => {
     onTourStepRef.current = onTourStep;
@@ -107,9 +142,9 @@ export default function MapCanvas({
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
-    if (!hasMapboxToken) return;
+    if (!hasMapboxToken || !mapboxToken) return;
 
-    mapboxgl.accessToken = mapboxToken!;
+    mapboxgl.accessToken = mapboxToken;
 
     const map = new mapboxgl.Map({
       container: containerRef.current,
@@ -207,7 +242,7 @@ export default function MapCanvas({
       mapRef.current = null;
       overlayRef.current = null;
     };
-  }, []);
+  }, [hasMapboxToken, mapboxToken, mapboxStyleUrl]);
 
   const rankedById = useMemo(() => new Map(ranked.map((row) => [row.id, row])), [ranked]);
 
@@ -350,7 +385,10 @@ export default function MapCanvas({
       {!hasMapboxToken && (
         <div className="map-token-missing">
           <strong>Mapbox token required</strong>
-          <span>Add `VITE_MAPBOX_TOKEN` to `.env`, then restart `npm run dev`.</span>
+          <span>
+            Add `VITE_MAPBOX_TOKEN=your_token` to the project `.env` file in this workspace (not
+            Hugging Face Space secrets). The dev server reloads it automatically.
+          </span>
         </div>
       )}
       {phase === "running" && (
