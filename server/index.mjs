@@ -76,6 +76,20 @@ const server = createServer(async (request, response) => {
       return;
     }
 
+    if (request.method === "GET" && url.pathname === "/api/config") {
+      writeJson(response, 200, {
+        mapboxToken:
+          process.env.VITE_MAPBOX_TOKEN ||
+          process.env.MAPBOX_TOKEN ||
+          "",
+        mapboxStyleUrl:
+          process.env.VITE_MAPBOX_STYLE_URL ||
+          process.env.MAPBOX_STYLE_URL ||
+          "mapbox://styles/ownpath/cmqe4wg8h005001s4bjx9461m",
+      });
+      return;
+    }
+
     if (request.method === "POST" && url.pathname === "/api/agent/run") {
       const body = await readJson(request);
       const prompt = typeof body?.prompt === "string" ? body.prompt : "";
